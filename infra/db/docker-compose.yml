@@ -1,0 +1,21 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:16
+    container_name: logicguard_db
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: logicguard
+    ports:
+      - "5432:5432" # mở cổng cho BE chạy ngoài docker (dev)
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d logicguard"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  pgdata:

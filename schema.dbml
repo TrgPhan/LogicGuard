@@ -1,0 +1,456 @@
+// ============================================
+// CORE ENTITIES
+// ============================================
+
+
+Table USER {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ email text [not null, unique]
+ password_hash text [not null]
+ created_at timestamptz [not null, default: `now()`]
+}
+
+
+Enum WRITING_TYPE_NAME {
+ essay
+ proposal
+ report
+ pitch
+ blog_post
+}
+
+
+Table WRITING_TYPE {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ name WRITING_TYPE_NAME [not null, unique]
+ display_name text [not null]
+ description text
+ default_checks jsonb [not null, default: '{}']
+ structure_template jsonb [not null, default: '{}']
+ created_at timestamptz [not null, default: `now()`]
+
+
+ indexes {
+   default_checks [type: gin]
+   structure_template [type: gin]
+ }
+}
+
+
+Table GOAL {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ user_id uuid [not null, ref: > USER.id, note: 'ON DELETE CASCADE']
+ writing_type_id uuid [ref: > WRITING_TYPE.id, note: 'ON DELETE SET NULL']
+ writing_type_custom text
+ rubric_text text [not null]
+ extracted_criteria jsonb [not null, default: '[]']
+ key_constraints text
+ created_at timestamptz [not null, default: `now()`]
+
+
+ indexes {
+   extracted_criteria [type: gin]
+ }
+}
+
+
+Table RUBRIC_CRITERION {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ goal_id uuid [not null, ref: > GOAL.id, note: 'ON DELETE CASCADE']
+ label text [not null]
+ description text
+ weight float [not null, default: 1.0, note: 'CHECK (weight >= 0 AND weight <= 1)']
+ order_index int [not null, default: 0]
+ is_mandatory boolean [not null, default: true]
+
+
+ indexes {
+   (goal_id, order_index) [unique]
+ }
+}
+
+
+// ============================================
+// DOCUMENT & CONTENT STRUCTURE
+// ============================================
+
+
+Table DOCUMENT {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ user_id uuid [not null, ref: > USER.id, note: 'ON DELETE CASCADE']
+ goal_id uuid [ref: > GOAL.id, note: 'ON DELETE SET NULL']
+ title text [not null, default: 'Untitled']
+ content_full text [not null, default: '']
+ structure_json jsonb [not null, default: '{}']
+ version int [not null, default: 1]
+ word_count int [not null, default: 0]
+ created_at timestamptz [not null, default: `now()`]
+ updated_at timestamptz [not null, default: `now()`]
+
+
+ indexes {
+   (user_id, updated_at)
+   structure_json [type: gin]
+ }
+}
+
+
+Enum SECTION_TYPE {
+ intro
+ body
+ conclusion
+ custom
+}
+
+
+Table DOCUMENT_SECTION {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ document_id uuid [not null, ref: > DOCUMENT.id, note: 'ON DELETE CASCADE']
+ section_type SECTION_TYPE [not null]
+ section_label text [note: 'Required when section_type = custom']
+ is_complete boolean [not null, default: false]
+ order_index int [not null, default: 0]
+
+
+ indexes {
+   (document_id, order_index) [unique]
+ }
+  Note: 'Section membership tracked via PARAGRAPH.section_id. No start/end indexes to avoid drift.'
+}
+
+
+Table PARAGRAPH {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ document_id uuid [not null, ref: > DOCUMENT.id, note: 'ON DELETE CASCADE']
+ section_id uuid [ref: > DOCUMENT_SECTION.id, note: 'ON DELETE SET NULL']
+ p_index int [not null]
+ text text [not null, default: '']
+ hash text [not null]
+ emb vector [note: 'pgvector extension; nullable for lazy computation']
+ word_count int [not null, default: 0]
+ last_analyzed_version int [note: 'Enables incremental analysis']
+ updated_at timestamptz [not null, default: `now()`]
+
+
+ indexes {
+   (document_id, p_index) [unique]
+   hash
+ }
+}
+
+
+Enum SENTENCE_ROLE {
+ claim
+ evidence
+ neutral
+ definition
+ transition
+}
+
+
+Table SENTENCE {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ paragraph_id uuid [not null, ref: > PARAGRAPH.id, note: 'ON DELETE CASCADE']
+ s_index int [not null]
+ text text [not null, default: '']
+ hash text [not null]
+ role SENTENCE_ROLE
+ emb vector
+ confidence_score float [note: 'Role classification confidence 0-1']
+
+
+ indexes {
+   (paragraph_id, s_index) [unique]
+   hash
+ }
+}
+
+
+// ============================================
+// TERM & CONCEPT TRACKING
+// ============================================
+
+
+Enum TERM_TYPE {
+ technical
+ domain_specific
+ general
+ pronoun
+}
+
+
+Enum TERM_CLARITY {
+ clear
+ needs_context
+ needs_definition
+ ambiguous
+ vague
+}
+
+
+Table TERM_DEFINITION {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ document_id uuid [not null, ref: > DOCUMENT.id, note: 'ON DELETE CASCADE']
+ term citext [not null, note: 'Case-insensitive for uniqueness']
+ first_mention_sentence_id uuid [not null, ref: > SENTENCE.id, note: 'ON DELETE CASCADE']
+ first_mention_p_index int [not null]
+ first_mention_s_index int [not null]
+
+
+ clarity_status TERM_CLARITY [not null, default: 'clear']
+ clarity_issues jsonb [not null, default: '[]']
+
+
+ definition_text text
+ definition_sentence_id uuid [ref: > SENTENCE.id, note: 'ON DELETE SET NULL']
+ context_text text
+
+
+ subsequent_uses jsonb [not null, default: '[]']
+ term_type TERM_TYPE [not null, default: 'general']
+
+
+ indexes {
+   (document_id, term) [unique]
+   clarity_issues [type: gin]
+ }
+  Note: 'clarity_issues format: [{issue: string, suggestions: string[], severity: string}]'
+}
+
+
+// ============================================
+// CLAIM-EVIDENCE RELATIONSHIPS
+// ============================================
+
+
+Enum LINK_TYPE {
+ supports
+ contradicts
+ elaborates
+}
+
+
+Table CLAIM_EVIDENCE_LINK {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ document_id uuid [not null, ref: > DOCUMENT.id, note: 'ON DELETE CASCADE']
+ claim_sentence_id uuid [not null, ref: > SENTENCE.id, note: 'ON DELETE CASCADE']
+ evidence_sentence_id uuid [not null, ref: > SENTENCE.id, note: 'ON DELETE CASCADE']
+ link_type LINK_TYPE [not null]
+ confidence_score float [not null, default: 0.0, note: 'CHECK (confidence_score >= 0 AND confidence_score <= 1)']
+ distance int [not null, default: 0, note: 'Number of sentences between claim and evidence']
+ created_at timestamptz [not null, default: `now()`]
+
+
+ indexes {
+   (claim_sentence_id, evidence_sentence_id) [unique]
+   (document_id, link_type)
+ }
+  Note: 'CRITICAL: Enforce both sentences belong to same document via application logic or trigger. DBML cannot express cross-table constraint.'
+}
+
+
+// ============================================
+// GOAL ALIGNMENT TRACKING
+// ============================================
+
+
+Enum EVIDENCE_QUALITY {
+ strong
+ moderate
+ weak
+ missing
+}
+
+
+Table CRITERION_COVERAGE {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ document_id uuid [not null, ref: > DOCUMENT.id, note: 'ON DELETE CASCADE']
+ criterion_id uuid [not null, ref: > RUBRIC_CRITERION.id, note: 'ON DELETE CASCADE']
+ is_addressed boolean [not null, default: false]
+ confidence_score float [not null, default: 0.0]
+ supporting_paragraph_ids jsonb [not null, default: '[]']
+ supporting_sentence_ids jsonb [not null, default: '[]']
+ evidence_quality EVIDENCE_QUALITY [not null, default: 'missing']
+ last_checked_at timestamptz [not null, default: `now()`]
+
+
+ indexes {
+   (document_id, criterion_id) [unique]
+   supporting_paragraph_ids [type: gin]
+   supporting_sentence_ids [type: gin]
+ }
+}
+
+
+// ============================================
+// ANALYSIS & ERROR DETECTION
+// ============================================
+
+
+Enum ANALYSIS_TYPE {
+ full
+ incremental
+ goal_alignment
+}
+
+
+Enum ANALYSIS_STATUS {
+ queued
+ running
+ completed
+ failed
+}
+
+
+Table ANALYSIS_RUN {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ document_id uuid [not null, ref: > DOCUMENT.id, note: 'ON DELETE CASCADE']
+ doc_version int [not null, note: 'Snapshot of DOCUMENT.version at analysis time']
+ analysis_type ANALYSIS_TYPE [not null, default: 'incremental']
+ trigger_source text [not null, note: 'auto_pause|manual|save|scheduled']
+ paragraphs_analyzed jsonb [not null, default: '[]']
+ status ANALYSIS_STATUS [not null, default: 'queued']
+ stats jsonb [not null, default: '{}']
+ error_message text
+ created_at timestamptz [not null, default: `now()`]
+ started_at timestamptz
+ finished_at timestamptz
+
+
+ indexes {
+   (document_id, created_at)
+   (document_id, doc_version)
+   paragraphs_analyzed [type: gin]
+ }
+  Note: 'stats format: {processing_time_ms, tokens_used, errors_found, errors_resolved_since_last}'
+}
+
+
+Enum ERROR_TYPE {
+ unclear_term
+ undefined_technical_term
+ ambiguous_reference
+ vague_language
+ contradiction
+ unsupported_claim
+ logic_gap
+ off_topic
+ missing_rubric_element
+ weak_evidence
+}
+
+
+Enum ERROR_CATEGORY {
+ clarity
+ logic
+ structure
+ goal_alignment
+}
+
+
+Enum SEVERITY {
+ critical
+ medium
+ minor
+}
+
+
+Table LOGIC_ERROR {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ analysis_run_id uuid [not null, ref: > ANALYSIS_RUN.id, note: 'ON DELETE CASCADE']
+ document_id uuid [not null, ref: > DOCUMENT.id, note: 'ON DELETE CASCADE']
+ paragraph_id uuid [ref: > PARAGRAPH.id, note: 'ON DELETE SET NULL']
+ sentence_id uuid [ref: > SENTENCE.id, note: 'ON DELETE SET NULL']
+
+
+ error_type ERROR_TYPE [not null]
+ error_category ERROR_CATEGORY [not null]
+ severity SEVERITY [not null, default: 'medium']
+
+
+ message text [not null]
+ meta jsonb [not null, default: '{}']
+
+
+ p_index int
+ s_index int
+
+
+ is_resolved boolean [not null, default: false]
+ resolved_at timestamptz
+ resolved_by_doc_version int
+
+
+ created_at timestamptz [not null, default: `now()`]
+
+
+ indexes {
+   (document_id, is_resolved, created_at)
+   (analysis_run_id, error_type)
+   meta [type: gin]
+ }
+  Note: 'meta format: {term, compared_sentences, similarity_score, affected_criterion_id, ...}'
+}
+
+
+Enum USER_ACTION {
+ accepted
+ dismissed
+ ignored
+ applied
+}
+
+
+Table FEEDBACK {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ logic_error_id uuid [not null, ref: > LOGIC_ERROR.id, note: 'ON DELETE CASCADE']
+ suggestion text [not null]
+ explanation text
+ meta jsonb [not null, default: '{}']
+ user_action USER_ACTION
+ user_action_at timestamptz
+ created_at timestamptz [not null, default: `now()`]
+  Note: 'meta format: {prompt_id, model_used, tokens, generation_time_ms}'
+}
+
+
+// ============================================
+// ANALYTICS & INSIGHTS (OPTIONAL)
+// ============================================
+
+
+Table WRITING_SESSION {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ document_id uuid [not null, ref: > DOCUMENT.id, note: 'ON DELETE CASCADE']
+ user_id uuid [not null, ref: > USER.id, note: 'ON DELETE CASCADE']
+ started_at timestamptz [not null, default: `now()`]
+ ended_at timestamptz
+ words_added int [not null, default: 0]
+ words_deleted int [not null, default: 0]
+ paragraphs_added int [not null, default: 0]
+ errors_introduced int [not null, default: 0]
+ errors_fixed int [not null, default: 0]
+ active_time_seconds int [not null, default: 0]
+ analysis_runs_triggered int [not null, default: 0]
+
+
+ indexes {
+   (user_id, started_at)
+   (document_id, started_at)
+ }
+}
+
+
+Table USER_ERROR_PATTERN {
+ id uuid [pk, note: 'DEFAULT gen_random_uuid()']
+ user_id uuid [not null, ref: > USER.id, note: 'ON DELETE CASCADE']
+ error_type ERROR_TYPE [not null]
+ frequency int [not null, default: 1]
+ last_occurred_at timestamptz [not null, default: `now()`]
+ avg_time_to_fix_seconds int
+
+
+ indexes {
+   (user_id, error_type) [unique]
+ }
+}
