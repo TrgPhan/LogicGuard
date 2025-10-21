@@ -5,11 +5,11 @@ DECLARE
   doc_evid  uuid;
 BEGIN
   SELECT p.document_id INTO doc_claim
-  FROM sentence s JOIN paragraph p ON s.paragraph_id = p.id
+  FROM "SENTENCE" s JOIN "PARAGRAPH" p ON s.paragraph_id = p.id
   WHERE s.id = NEW.claim_sentence_id;
 
   SELECT p.document_id INTO doc_evid
-  FROM sentence s JOIN paragraph p ON s.paragraph_id = p.id
+  FROM "SENTENCE" s JOIN "PARAGRAPH" p ON s.paragraph_id = p.id
   WHERE s.id = NEW.evidence_sentence_id;
 
   IF doc_claim IS NULL OR doc_evid IS NULL OR doc_claim <> doc_evid THEN
@@ -20,7 +20,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_claim_evidence_same_doc ON claim_evidence_link;
+DROP TRIGGER IF EXISTS trg_claim_evidence_same_doc ON "CLAIM_EVIDENCE_LINK";
 CREATE TRIGGER trg_claim_evidence_same_doc
-BEFORE INSERT OR UPDATE ON claim_evidence_link
+BEFORE INSERT OR UPDATE ON "CLAIM_EVIDENCE_LINK"
 FOR EACH ROW EXECUTE FUNCTION ensure_claim_evidence_same_document();
