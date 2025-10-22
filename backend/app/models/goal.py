@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, ForeignKey, Enum as SQLEnum, CheckConstraint, Index
+from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, ForeignKey, Enum as SQLEnum, CheckConstraint, Index, ARRAY
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -46,7 +46,7 @@ class Goal(Base):
     writing_type_custom = Column(Text)
     rubric_text = Column(Text, nullable=False)
     extracted_criteria = Column(JSONB, nullable=False, server_default='[]')
-    key_constraints = Column(Text)
+    key_constraints = Column(ARRAY(Text))  # Array of constraint strings
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships
