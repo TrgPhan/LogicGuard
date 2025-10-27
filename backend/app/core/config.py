@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     # CORS
     FRONTEND_URL: str = "http://localhost:3000"
     
+    # Gemini AI
+    GEMINI_API_KEY: str
+
+    # Gemini Model
+
+    GEMINI_MODEL_NAME : str
+    
     class Config:
         env_file = ".env"
 
