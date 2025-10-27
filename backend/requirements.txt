@@ -19,5 +19,16 @@ pydantic==2.10.0
 pydantic-settings==2.6.0
 email-validator==2.2.0
 
-# AI/LLM
-google-generativeai==0.8.3
+
+# for ai
+transformers 
+torch 
+numpy
+sentence-transformers 
+faiss-cpu
+google-generativeai
+datasets 
+scikit-learn  
+pandas  
+accelerate
+dill  # Required by datasets and multiprocessing  
