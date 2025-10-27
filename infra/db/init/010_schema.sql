@@ -119,7 +119,7 @@ CREATE TABLE "GOAL" (
   "writing_type_custom" text,
   "rubric_text" text NOT NULL,
   "extracted_criteria" jsonb NOT NULL DEFAULT '[]'::jsonb,
-  "key_constraints" text,
+  "key_constraints" text[],  -- Array of constraint strings
   "created_at" timestamptz NOT NULL DEFAULT (now())
 );
 

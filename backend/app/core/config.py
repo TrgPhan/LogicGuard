@@ -16,12 +16,9 @@ class Settings(BaseSettings):
     # CORS
     FRONTEND_URL: str = "http://localhost:3000"
     
-    # Gemini AI
+    # AI/LLM
     GEMINI_API_KEY: str
-
-    # Gemini Model
-
-    GEMINI_MODEL_NAME : str
+    GEMINI_MODEL: str = "gemini-2.5-flash"  # có thể đổi sang phiên bản pro nếu cần chất lượng cao hơn
     
     class Config:
         env_file = ".env"
