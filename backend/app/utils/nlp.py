@@ -83,12 +83,32 @@ def extract_paragraphs(text: str) -> list:
     return [p.strip() for p in text.split('\n\n') if p.strip()]
 
 
-def extract_sentences(paragraph: str) -> list:
-    """Extract sentences from a paragraph"""
-    # Simple sentence splitting (enhance with NLP library)
+def extract_sentences(text: str) -> list:
+    """
+    Extract sentences from text using improved sentence splitting
+    Works better for Vietnamese and English text
+    """
     import re
-    sentences = re.split(r'[.!?]+', paragraph)
-    return [s.strip() for s in sentences if s.strip()]
+    
+    # Normalize whitespace
+    text = re.sub(r'\s+', ' ', text.strip())
+    
+    # Split by sentence endings: . ! ? followed by space and capital letter or quote
+    # Also handles Vietnamese specific patterns
+    sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ"\'])', text)
+    
+    # Clean and filter
+    result = []
+    for s in sentences:
+        s = s.strip()
+        # Keep sentences with at least 3 words
+        if s and len(s.split()) >= 3:
+            # Remove trailing punctuation for consistency
+            s = re.sub(r'[.!?]+$', '', s).strip()
+            if s:
+                result.append(s)
+    
+    return result
 
 
 def calculate_word_count(text: str) -> int:
