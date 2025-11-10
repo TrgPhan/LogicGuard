@@ -5,6 +5,7 @@ import type React from "react"
 import { DashboardHeader } from "./dashboard-header"
 import { DashboardSidebar } from "./dashboard-sidebar"
 import { ProtectedRoute } from "./protected-route"
+import { DocumentProvider } from "@/lib/document-context"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -13,13 +14,15 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-white">
-        <DashboardHeader />
-        <div className="flex">
-          <DashboardSidebar />
-          <main className="flex-1 bg-white">{children}</main>
+      <DocumentProvider>
+        <div className="min-h-screen bg-white">
+          <DashboardHeader />
+          <div className="flex">
+            <DashboardSidebar />
+            <main className="flex-1 bg-white">{children}</main>
+          </div>
         </div>
-      </div>
+      </DocumentProvider>
     </ProtectedRoute>
   )
 }

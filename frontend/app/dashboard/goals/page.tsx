@@ -1,17 +1,62 @@
 "use client"
 
+import { useRouter } from "next/navigation"
+import { useDocument } from "@/lib/document-context"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Target, TrendingUp, CheckCircle2, AlertCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Target, TrendingUp, CheckCircle2, AlertCircle, ChevronLeft } from "lucide-react"
+
+const documentGoals: Record<
+  string,
+  {
+    metrics: Array<{ name: string; value: number; target: number; status: string }>
+    overallProgress: number
+  }
+> = {
+  "1": {
+    metrics: [
+      { name: "Rubric Coverage", value: 85, target: 90, status: "good" },
+      { name: "Argument Coherence", value: 72, target: 80, status: "warning" },
+      { name: "Evidence Quality", value: 90, target: 85, status: "excellent" },
+      { name: "Logical Flow", value: 68, target: 75, status: "warning" },
+    ],
+    overallProgress: 78,
+  },
+  "2": {
+    metrics: [
+      { name: "Rubric Coverage", value: 92, target: 90, status: "excellent" },
+      { name: "Argument Coherence", value: 88, target: 80, status: "excellent" },
+      { name: "Evidence Quality", value: 85, target: 85, status: "good" },
+      { name: "Logical Flow", value: 80, target: 75, status: "good" },
+    ],
+    overallProgress: 86,
+  },
+}
 
 export default function GoalsPage() {
-  const metrics = [
-    { name: "Rubric Coverage", value: 85, target: 90, status: "good" },
-    { name: "Argument Coherence", value: 72, target: 80, status: "warning" },
-    { name: "Evidence Quality", value: 90, target: 85, status: "excellent" },
-    { name: "Logical Flow", value: 68, target: 75, status: "warning" },
-  ]
+  const router = useRouter()
+  const { selectedDocumentId } = useDocument()
+
+  if (!selectedDocumentId) {
+    return (
+      <DashboardLayout>
+        <div className="p-8 space-y-6 text-center">
+          <div>
+            <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Goal Alignment Dashboard</h1>
+            <p className="text-[#605A57] mb-6">Please select a document to view goal alignment</p>
+            <Button onClick={() => router.push("/dashboard/documents")} className="bg-[#37322F] hover:bg-[#37322F]/90">
+              <ChevronLeft className="h-4 w-4 mr-2" />
+              Back to Documents
+            </Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  const goalsData = documentGoals[selectedDocumentId] || documentGoals["1"]
 
   return (
     <DashboardLayout>
@@ -27,19 +72,19 @@ export default function GoalsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-xl">Overall Progress</CardTitle>
-                <CardDescription>Your writing is 78% aligned with your goals</CardDescription>
+                <CardDescription>Your writing is {goalsData.overallProgress}% aligned with your goals</CardDescription>
               </div>
               <Target className="h-8 w-8 text-[#37322F]" />
             </div>
           </CardHeader>
           <CardContent>
-            <Progress value={78} className="h-3" />
+            <Progress value={goalsData.overallProgress} className="h-3" />
           </CardContent>
         </Card>
 
         {/* Metrics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {metrics.map((metric, index) => {
+          {goalsData.metrics.map((metric, index) => {
             const getStatusColor = (status: string) => {
               switch (status) {
                 case "excellent":

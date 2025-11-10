@@ -182,7 +182,7 @@ export default function LandingPage() {
                           }`}
                         >
                           <img
-                            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/dsadsadsa.jpg-xTHS4hGwCWp2H5bTj8np6DXZUyrxX7.jpeg"
+                            src="/images/design-mode/dsadsadsa.jpg.jpeg"
                             alt="Schedules Dashboard - Customer Subscription Management"
                             className="w-full h-full object-cover"
                           />

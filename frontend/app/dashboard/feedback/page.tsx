@@ -1,12 +1,18 @@
 "use client"
 
+import { useRouter } from "next/navigation"
+import { useDocument } from "@/lib/document-context"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { AlertCircle, AlertTriangle, Info } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { AlertCircle, AlertTriangle, Info, ChevronLeft } from "lucide-react"
 
-export default function FeedbackPage() {
-  const feedbackItems = [
+const documentFeedback: Record<
+  string,
+  Array<{ severity: string; type: string; message: string; location: string; suggestion: string }>
+> = {
+  "1": [
     {
       severity: "high",
       type: "Logical Contradiction",
@@ -28,7 +34,40 @@ export default function FeedbackPage() {
       location: "Paragraph 2, Line 1",
       suggestion: "Simplify the sentence structure for better readability",
     },
-  ]
+  ],
+  "2": [
+    {
+      severity: "medium",
+      type: "Missing Evidence",
+      message: "Climate impact claims need stronger evidence",
+      location: "Paragraph 4",
+      suggestion: "Add recent statistics or scientific studies",
+    },
+  ],
+}
+
+export default function FeedbackPage() {
+  const router = useRouter()
+  const { selectedDocumentId } = useDocument()
+
+  if (!selectedDocumentId) {
+    return (
+      <DashboardLayout>
+        <div className="p-8 space-y-6 text-center">
+          <div>
+            <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Contextual Feedback</h1>
+            <p className="text-[#605A57] mb-6">Please select a document to view feedback</p>
+            <Button onClick={() => router.push("/dashboard/documents")} className="bg-[#37322F] hover:bg-[#37322F]/90">
+              <ChevronLeft className="h-4 w-4 mr-2" />
+              Back to Documents
+            </Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  const feedbackItems = documentFeedback[selectedDocumentId] || documentFeedback["1"]
 
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
@@ -65,7 +104,9 @@ export default function FeedbackPage() {
               <CardTitle className="text-sm font-medium text-[#605A57]">High Priority</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-red-600">1</div>
+              <div className="text-3xl font-bold text-red-600">
+                {feedbackItems.filter((f) => f.severity === "high").length}
+              </div>
             </CardContent>
           </Card>
           <Card className="border-[rgba(55,50,47,0.12)]">
@@ -73,7 +114,9 @@ export default function FeedbackPage() {
               <CardTitle className="text-sm font-medium text-[#605A57]">Medium Priority</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-yellow-600">1</div>
+              <div className="text-3xl font-bold text-yellow-600">
+                {feedbackItems.filter((f) => f.severity === "medium").length}
+              </div>
             </CardContent>
           </Card>
           <Card className="border-[rgba(55,50,47,0.12)]">
@@ -81,7 +124,9 @@ export default function FeedbackPage() {
               <CardTitle className="text-sm font-medium text-[#605A57]">Low Priority</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-blue-600">1</div>
+              <div className="text-3xl font-bold text-blue-600">
+                {feedbackItems.filter((f) => f.severity === "low").length}
+              </div>
             </CardContent>
           </Card>
         </div>
