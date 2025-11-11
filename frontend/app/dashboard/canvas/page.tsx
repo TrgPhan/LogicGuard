@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useDocument } from "@/lib/document-context"
-import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Save, Download, ChevronLeft } from "lucide-react"
 import { RichTextEditor } from "@/components/rich-text-editor"
@@ -44,55 +43,51 @@ export default function CanvasPage() {
 
   if (!selectedDocumentId) {
     return (
-      <DashboardLayout>
-        <div className="p-8 space-y-6 text-center">
-          <div>
-            <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Writing Canvas</h1>
-            <p className="text-[#605A57] mb-6">Please select a document to start writing</p>
-            <Button onClick={() => router.push("/dashboard/documents")} className="bg-[#37322F] hover:bg-[#37322F]/90">
-              <ChevronLeft className="h-4 w-4 mr-2" />
-              Back to Documents
-            </Button>
-          </div>
+      <div className="p-8 space-y-6 text-center">
+        <div>
+          <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Writing Canvas</h1>
+          <p className="text-[#605A57] mb-6">Please select a document to start writing</p>
+          <Button onClick={() => router.push("/dashboard/documents")} className="bg-[#37322F] hover:bg-[#37322F]/90">
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            Back to Documents
+          </Button>
         </div>
-      </DashboardLayout>
+      </div>
     )
   }
 
   const currentDoc = documents[selectedDocumentId] || { title: "Untitled Document", content: "" }
 
   return (
-    <DashboardLayout>
-      <div className="p-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Writing Canvas</h1>
-            <p className="text-[#605A57]">
-              Editing: <span className="font-medium">{currentDoc.title}</span>
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="gap-2 bg-transparent">
-              <Save className="h-4 w-4" />
-              Save Draft
-            </Button>
-            <Button className="gap-2 bg-[#37322F] hover:bg-[#37322F]/90">
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
-          </div>
+    <div className="p-8 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Writing Canvas</h1>
+          <p className="text-[#605A57]">
+            Editing: <span className="font-medium">{currentDoc.title}</span>
+          </p>
         </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <RichTextEditor onContentChange={setEditorContent} initialContent={currentDoc.content} />
-          </div>
-
-          <div className="space-y-4">
-            <ContextSetup />
-          </div>
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2 bg-transparent">
+            <Save className="h-4 w-4" />
+            Save Draft
+          </Button>
+          <Button className="gap-2 bg-[#37322F] hover:bg-[#37322F]/90">
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
         </div>
       </div>
-    </DashboardLayout>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <RichTextEditor onContentChange={setEditorContent} initialContent={currentDoc.content} />
+        </div>
+
+        <div className="space-y-4">
+          <ContextSetup />
+        </div>
+      </div>
+    </div>
   )
 }

@@ -8,12 +8,14 @@ import { Bold, Italic, Heading2, List, ListOrdered, Undo2, Redo2, Minus } from "
 
 interface RichTextEditorProps {
   onContentChange?: (content: string) => void
+  initialContent?: string
 }
 
-export function RichTextEditor({ onContentChange }: RichTextEditorProps) {
+export function RichTextEditor({ onContentChange, initialContent }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [StarterKit],
-    content: "<p>Start typing your content here...</p>",
+    content: initialContent || "<p>Start typing your content here...</p>",
+    immediatelyRender: false,
     onUpdate: ({ editor }) => {
       onContentChange?.(editor.getHTML())
     },

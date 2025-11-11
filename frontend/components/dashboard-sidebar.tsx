@@ -66,9 +66,9 @@ export function DashboardSidebar() {
 
   return (
     <aside className="w-64 border-r border-[rgba(55,50,47,0.12)] bg-[#F7F5F3] min-h-[calc(100vh-73px)] sticky top-[73px]">
-      <nav className="p-4 space-y-1">
+      <nav className="p-4 space-y-0.5">
         {/* Overview section */}
-        <div className="mb-6">
+        <div className="mb-4">
           {navigation.map((item) => {
             const isActive = pathname === item.href
             const Icon = item.icon
@@ -78,7 +78,7 @@ export function DashboardSidebar() {
                 key={item.name}
                 onClick={() => router.push(item.href)}
                 className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors text-left",
+                  "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
                   isActive ? "bg-[#37322F] text-white" : "text-[#605A57] hover:bg-[#E8E6E3] hover:text-[#37322F]",
                 )}
               >
@@ -90,12 +90,12 @@ export function DashboardSidebar() {
         </div>
 
         {/* Documents with nested sub-stacks */}
-        <div className="mb-6">
+        <div className="mb-4">
           {/* Main Documents Link */}
           <button
             onClick={() => router.push(mainStack.href)}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors text-left",
+              "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
               pathname === mainStack.href
                 ? "bg-[#37322F] text-white"
                 : "text-[#605A57] hover:bg-[#E8E6E3] hover:text-[#37322F]",
@@ -108,7 +108,7 @@ export function DashboardSidebar() {
             {mainStack.name}
           </button>
 
-          <div className="mt-1 space-y-1 pl-4 border-l-2 border-[rgba(55,50,47,0.12)] ml-2">
+          <div className="mt-0.5 space-y-0.5 pl-4 border-l-2 border-[rgba(55,50,47,0.12)] ml-2">
             {subStacks.map((item) => {
               const isActive = pathname === item.href
               const isDisabled = !selectedDocumentId
@@ -147,7 +147,7 @@ export function DashboardSidebar() {
                 key={item.name}
                 onClick={() => router.push(item.href)}
                 className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors text-left",
+                  "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
                   isActive ? "bg-[#37322F] text-white" : "text-[#605A57] hover:bg-[#E8E6E3] hover:text-[#37322F]",
                 )}
               >
