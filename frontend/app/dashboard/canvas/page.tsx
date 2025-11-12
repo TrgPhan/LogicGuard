@@ -1,14 +1,14 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useDocument } from "@/lib/document-context"
 import { Button } from "@/components/ui/button"
 import { Save, Download, ChevronLeft } from "lucide-react"
 import { RichTextEditor } from "@/components/rich-text-editor"
 import { ContextSetup } from "@/components/context-setup"
 
-const documents: Record<string, { title: string; content: string }> = {
+const mockDocuments: Record<string, { title: string; content: string }> = {
   "1": {
     title: "Research Paper Draft",
     content:
@@ -38,10 +38,56 @@ const documents: Record<string, { title: string; content: string }> = {
 
 export default function CanvasPage() {
   const router = useRouter()
-  const { selectedDocumentId } = useDocument()
-  const [editorContent, setEditorContent] = useState("")
+  const searchParams = useSearchParams()
+  const { selectedDocumentId, selectedDocument } = useDocument()
 
-  if (!selectedDocumentId) {
+  const [editorContent, setEditorContent] = useState("")
+  const [currentDoc, setCurrentDoc] = useState<{ title: string; content: string } | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const docId = searchParams.get("docId") || selectedDocumentId
+
+  useEffect(() => {
+    if (docId) {
+      fetchDocument(docId)
+    }
+  }, [docId])
+
+  const fetchDocument = async (documentId: string) => {
+    setIsLoading(true)
+    try {
+      const doc = mockDocuments[documentId] || {
+        title: selectedDocument?.title || "Untitled Document",
+        content: selectedDocument?.content || ""
+      }
+      setCurrentDoc(doc)
+      setEditorContent(doc.content)
+    } catch (error) {
+      console.error("Failed to fetch document:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSave = async () => {
+    if (!docId) return
+
+    setIsSaving(true)
+    try {
+      // API integration point: PUT /api/documents/{id}
+    } catch (error) {
+      console.error("Failed to save document:", error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleExport = () => {
+    // Export functionality
+  }
+
+  if (!docId) {
     return (
       <div className="p-8 space-y-6 text-center">
         <div>
@@ -56,7 +102,13 @@ export default function CanvasPage() {
     )
   }
 
-  const currentDoc = documents[selectedDocumentId] || { title: "Untitled Document", content: "" }
+  if (isLoading) {
+    return (
+      <div className="p-8 space-y-6 text-center">
+        <p className="text-[#605A57]">Loading document...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="p-8 space-y-6">
@@ -64,15 +116,23 @@ export default function CanvasPage() {
         <div>
           <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Writing Canvas</h1>
           <p className="text-[#605A57]">
-            Editing: <span className="font-medium">{currentDoc.title}</span>
+            Editing: <span className="font-medium">{currentDoc?.title}</span>
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2 bg-transparent">
+          <Button
+            variant="outline"
+            className="gap-2 bg-transparent"
+            onClick={handleSave}
+            disabled={isSaving}
+          >
             <Save className="h-4 w-4" />
-            Save Draft
+            {isSaving ? "Saving..." : "Save Draft"}
           </Button>
-          <Button className="gap-2 bg-[#37322F] hover:bg-[#37322F]/90">
+          <Button
+            className="gap-2 bg-[#37322F] hover:bg-[#37322F]/90"
+            onClick={handleExport}
+          >
             <Download className="h-4 w-4" />
             Export
           </Button>
@@ -81,7 +141,10 @@ export default function CanvasPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <RichTextEditor onContentChange={setEditorContent} initialContent={currentDoc.content} />
+          <RichTextEditor
+            onContentChange={setEditorContent}
+            initialContent={currentDoc?.content || ""}
+          />
         </div>
 
         <div className="space-y-4">

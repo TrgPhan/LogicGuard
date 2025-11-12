@@ -1,16 +1,22 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useDocument } from "@/lib/document-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { AlertCircle, AlertTriangle, Info, ChevronLeft } from "lucide-react"
 
-const documentFeedback: Record<
-  string,
-  Array<{ severity: string; type: string; message: string; location: string; suggestion: string }>
-> = {
+interface FeedbackItem {
+  severity: "high" | "medium" | "low"
+  type: string
+  message: string
+  location: string
+  suggestion: string
+}
+
+const mockFeedbackData: Record<string, FeedbackItem[]> = {
   "1": [
     {
       severity: "high",
@@ -47,9 +53,32 @@ const documentFeedback: Record<
 
 export default function FeedbackPage() {
   const router = useRouter()
-  const { selectedDocumentId } = useDocument()
+  const searchParams = useSearchParams()
+  const { selectedDocumentId, selectedDocument } = useDocument()
 
-  if (!selectedDocumentId) {
+  const [feedbackItems, setFeedbackItems] = useState<FeedbackItem[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+
+  const docId = searchParams.get("docId") || selectedDocumentId
+
+  useEffect(() => {
+    if (docId) {
+      fetchFeedback(docId)
+    }
+  }, [docId])
+
+  const fetchFeedback = async (documentId: string) => {
+    setIsLoading(true)
+    try {
+      setFeedbackItems(mockFeedbackData[documentId] || mockFeedbackData["1"])
+    } catch (error) {
+      console.error("Failed to fetch feedback:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (!docId) {
     return (
       <div className="p-8 space-y-6 text-center">
         <div>
@@ -63,8 +92,6 @@ export default function FeedbackPage() {
       </div>
     )
   }
-
-  const feedbackItems = documentFeedback[selectedDocumentId] || documentFeedback["1"]
 
   const getSeverityIcon = (severity: string) => {
     switch (severity) {

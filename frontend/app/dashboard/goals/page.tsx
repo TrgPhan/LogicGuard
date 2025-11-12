@@ -1,19 +1,26 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useDocument } from "@/lib/document-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { Target, TrendingUp, CheckCircle2, AlertCircle, ChevronLeft } from "lucide-react"
 
-const documentGoals: Record<
-  string,
-  {
-    metrics: Array<{ name: string; value: number; target: number; status: string }>
-    overallProgress: number
-  }
-> = {
+interface GoalMetric {
+  name: string
+  value: number
+  target: number
+  status: "excellent" | "good" | "warning" | "poor"
+}
+
+interface GoalsData {
+  metrics: GoalMetric[]
+  overallProgress: number
+}
+
+const mockGoalsData: Record<string, GoalsData> = {
   "1": {
     metrics: [
       { name: "Rubric Coverage", value: 85, target: 90, status: "good" },
@@ -36,9 +43,32 @@ const documentGoals: Record<
 
 export default function GoalsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { selectedDocumentId } = useDocument()
 
-  if (!selectedDocumentId) {
+  const [goalsData, setGoalsData] = useState<GoalsData | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  const docId = searchParams.get("docId") || selectedDocumentId
+
+  useEffect(() => {
+    if (docId) {
+      fetchGoals(docId)
+    }
+  }, [docId])
+
+  const fetchGoals = async (documentId: string) => {
+    setIsLoading(true)
+    try {
+      setGoalsData(mockGoalsData[documentId] || mockGoalsData["1"])
+    } catch (error) {
+      console.error("Failed to fetch goals:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (!docId) {
     return (
       <div className="p-8 space-y-6 text-center">
         <div>
@@ -53,7 +83,13 @@ export default function GoalsPage() {
     )
   }
 
-  const goalsData = documentGoals[selectedDocumentId] || documentGoals["1"]
+  if (isLoading || !goalsData) {
+    return (
+      <div className="p-8 space-y-6 text-center">
+        <p className="text-[#605A57]">Loading goals...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="p-8 space-y-6">
