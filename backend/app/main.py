@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
-from app.routers import auth, documents, goals, feedback, analysis, writing_types
+from app.routers import auth, documents, goals, feedback, analysis, writing_types, predefined_options, users
 
 settings = get_settings()
 
@@ -23,9 +23,11 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
 app.include_router(goals.router, prefix="/api/goals", tags=["Goals"])
 app.include_router(writing_types.router, prefix="/api/writing-types", tags=["Writing Types"])
+app.include_router(predefined_options.router, prefix="/api/predefined-options", tags=["Predefined Options"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["Analysis"])
 app.include_router(feedback.router, prefix="/api/feedback", tags=["Feedback"])
 

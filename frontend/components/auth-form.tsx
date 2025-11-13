@@ -3,11 +3,12 @@
 import type React from "react"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { authUtils, validation } from "@/lib/auth"
+import { AuthAPI } from "@/lib/api-service"
+import { validation } from "@/lib/auth"
 import Link from "next/link"
 
 interface AuthFormProps {
@@ -16,6 +17,7 @@ interface AuthFormProps {
 
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -69,23 +71,36 @@ export function AuthForm({ mode }: AuthFormProps) {
     setLoading(true)
 
     try {
-      let response
       if (mode === "login") {
-        response = await authUtils.login(formData.email, formData.password)
-      } else {
-        response = await authUtils.register(formData.email, formData.password, formData.name)
-      }
-
-      if (response.success) {
-        setMessage({ type: "success", text: `${mode === "login" ? "Login" : "Registration"} successful!` })
+        await AuthAPI.login({
+          email: formData.email,
+          password: formData.password,
+        })
+        
+        setMessage({ type: "success", text: "Login successful!" })
+        
+        // Check if there's a redirect path from sessionStorage
+        const redirectTo = sessionStorage.getItem('redirectAfterLogin') || '/dashboard'
+        sessionStorage.removeItem('redirectAfterLogin')
+        
         setTimeout(() => {
-          router.push("/profile")
+          router.push(redirectTo)
         }, 500)
       } else {
-        setMessage({ type: "error", text: response.message || "An error occurred" })
+        await AuthAPI.register({
+          email: formData.email,
+          password: formData.password,
+          full_name: formData.name,
+        })
+        
+        setMessage({ type: "success", text: "Registration successful! Redirecting..." })
+        setTimeout(() => {
+          router.push('/dashboard')
+        }, 500)
       }
-    } catch (error) {
-      setMessage({ type: "error", text: "An unexpected error occurred" })
+    } catch (error: any) {
+      const errorMessage = error.message || "An unexpected error occurred"
+      setMessage({ type: "error", text: errorMessage })
     } finally {
       setLoading(false)
     }
@@ -188,14 +203,6 @@ export function AuthForm({ mode }: AuthFormProps) {
             </>
           )}
         </div>
-
-        {mode === "login" && (
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-            <p className="text-xs text-blue-700 font-medium mb-1">Demo credentials:</p>
-            <p className="text-xs text-blue-600">Email: demo@logicguard.com</p>
-            <p className="text-xs text-blue-600">Password: password123</p>
-          </div>
-        )}
       </div>
     </div>
   )

@@ -13,7 +13,8 @@ class CriterionPreview(BaseModel):
 
 class GoalPreviewRequest(BaseModel):
     """Request to preview goal extraction"""
-    rubric_text: str = Field(..., min_length=1)
+    rubric_text: Optional[str] = Field(None, min_length=1)
+    selected_rubrics: Optional[List[str]] = None  # Selected rubric checkboxes from UI
     writing_type_id: Optional[str] = None
     writing_type_custom: Optional[str] = None
     key_constraints: Optional[List[str]] = None  # List of constraint strings

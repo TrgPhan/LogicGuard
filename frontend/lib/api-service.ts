@@ -1,9 +1,20 @@
 import type { Document } from "./document-context"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 
 async function handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
+        // Handle authentication errors
+        if (response.status === 401 || response.status === 403) {
+            // Token expired or invalid - logout and redirect
+            if (typeof window !== "undefined") {
+                localStorage.removeItem("token")
+                localStorage.removeItem("user")
+                window.location.href = "/login?error=session_expired"
+            }
+            throw new Error("Authentication required. Please login again.")
+        }
+
         const error = await response.json().catch(() => ({ message: "An error occurred" }))
         throw new Error(error.message || `HTTP error! status: ${response.status}`)
     }
@@ -20,6 +31,13 @@ function getHeaders(token?: string): HeadersInit {
     }
 
     return headers
+}
+
+function getToken(): string | null {
+    if (typeof window !== "undefined") {
+        return localStorage.getItem("token")
+    }
+    return null
 }
 
 export const DocumentsAPI = {
@@ -109,5 +127,261 @@ export const AnalysisAPI = {
             headers: getHeaders(),
         })
         return handleResponse<{ status: string }>(response)
+    },
+}
+
+// ============================================================================
+// PREDEFINED OPTIONS API
+// ============================================================================
+
+export interface PredefinedWritingType {
+    id: string
+    name: string
+    description: string
+    default_rubrics: string[]
+    default_constraints: string[]
+}
+
+export interface RubricTemplate {
+    writing_type: string
+    description: string
+    rubric_items: Array<{
+        label: string
+        description: string
+        weight: number
+        is_mandatory: boolean
+    }>
+    constraint_items: Array<{
+        label: string
+        description: string
+        is_required: boolean
+    }>
+}
+
+export const PredefinedOptionsAPI = {
+    async getWritingTypes(): Promise<PredefinedWritingType[]> {
+        const response = await fetch(`${API_BASE_URL}/predefined-options/writing-types`, {
+            headers: getHeaders(getToken() || undefined),
+        })
+        return handleResponse<PredefinedWritingType[]>(response)
+    },
+
+    async getRubricTemplate(writingTypeId: string): Promise<RubricTemplate> {
+        const response = await fetch(
+            `${API_BASE_URL}/predefined-options/rubric-templates/${writingTypeId}`,
+            {
+                headers: getHeaders(getToken() || undefined),
+            }
+        )
+        return handleResponse<RubricTemplate>(response)
+    },
+}
+
+// ============================================================================
+// ENHANCED GOALS API
+// ============================================================================
+
+export interface GoalCreateRequest {
+    writing_type_custom: string
+    rubric_text?: string
+    selected_rubrics?: string[]
+    key_constraints: string[]
+}
+
+export interface GoalPreviewRequest extends GoalCreateRequest {
+    writing_type_id?: string
+}
+
+export interface CriterionPreview {
+    label: string
+    description: string
+    weight: number
+    is_mandatory: boolean
+    order_index: number
+}
+
+export interface GoalPreviewResponse {
+    main_goal: string
+    criteria: CriterionPreview[]
+    success_indicators: string[]
+    writing_type: string | null
+    key_constraints: string[] | null
+    total_criteria: number
+    mandatory_count: number
+    optional_count: number
+}
+
+export interface Goal {
+    id: string
+    user_id: string
+    writing_type_custom: string | null
+    rubric_text: string
+    extracted_criteria: Record<string, any>
+    key_constraints: string[] | null
+    created_at: string
+}
+
+export interface GoalDetailResponse extends Goal {
+    criteria: Array<{
+        id: string
+        goal_id: string
+        label: string
+        description: string | null
+        weight: number
+        order_index: number
+        is_mandatory: boolean
+    }>
+}
+
+export const EnhancedGoalsAPI = {
+    async create(data: GoalCreateRequest): Promise<GoalDetailResponse> {
+        const response = await fetch(`${API_BASE_URL.replace('/v1', '')}/goals/`, {
+            method: "POST",
+            headers: getHeaders(getToken() || undefined),
+            body: JSON.stringify(data),
+        })
+        return handleResponse<GoalDetailResponse>(response)
+    },
+
+    async preview(data: GoalPreviewRequest): Promise<GoalPreviewResponse> {
+        const response = await fetch(`${API_BASE_URL.replace('/v1', '')}/goals/preview`, {
+            method: "POST",
+            headers: getHeaders(getToken() || undefined),
+            body: JSON.stringify(data),
+        })
+        return handleResponse<GoalPreviewResponse>(response)
+    },
+
+    async list(): Promise<Goal[]> {
+        const response = await fetch(`${API_BASE_URL.replace('/v1', '')}/goals/`, {
+            headers: getHeaders(getToken() || undefined),
+        })
+        return handleResponse<Goal[]>(response)
+    },
+
+    async getById(goalId: string): Promise<GoalDetailResponse> {
+        const response = await fetch(`${API_BASE_URL.replace('/v1', '')}/goals/${goalId}`, {
+            headers: getHeaders(getToken() || undefined),
+        })
+        return handleResponse<GoalDetailResponse>(response)
+    },
+
+    async delete(goalId: string): Promise<void> {
+        const response = await fetch(`${API_BASE_URL.replace('/v1', '')}/goals/${goalId}`, {
+            method: "DELETE",
+            headers: getHeaders(getToken() || undefined),
+        })
+        if (!response.ok) {
+            throw new Error(`Failed to delete goal: ${response.status}`)
+        }
+    },
+}
+
+// ============================================================================
+// AUTHENTICATION API
+// ============================================================================
+
+export interface LoginRequest {
+    email: string
+    password: string
+}
+
+export interface RegisterRequest {
+    email: string
+    password: string
+}
+
+export interface AuthResponse {
+    access_token: string
+    token_type: string
+    user: {
+        id: string
+        email: string
+        created_at: string
+    }
+}
+
+export interface UserProfile {
+    id: string
+    email: string
+    created_at: string
+    total_documents?: number
+    total_words_written?: number
+    total_errors_found?: number
+    total_errors_fixed?: number
+    active_writing_time_minutes?: number
+}
+
+export const AuthAPI = {
+    async login(credentials: LoginRequest): Promise<AuthResponse> {
+        const response = await fetch(`${API_BASE_URL}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(credentials),
+        })
+        
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: "Login failed" }))
+            throw new Error(error.detail || "Invalid email or password")
+        }
+        
+        const data = await response.json()
+        
+        // Save token and user info to localStorage
+        if (typeof window !== "undefined") {
+            localStorage.setItem("token", data.access_token)
+            localStorage.setItem("user", JSON.stringify(data.user))
+        }
+        
+        return data
+    },
+
+    async register(credentials: RegisterRequest): Promise<AuthResponse> {
+        const response = await fetch(`${API_BASE_URL}/auth/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(credentials),
+        })
+        
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: "Registration failed" }))
+            throw new Error(error.detail || "Registration failed")
+        }
+        
+        const data = await response.json()
+        
+        // Auto-login after successful registration
+        if (typeof window !== "undefined") {
+            localStorage.setItem("token", data.access_token)
+            localStorage.setItem("user", JSON.stringify(data.user))
+        }
+        
+        return data
+    },
+
+    async logout(): Promise<void> {
+        if (typeof window !== "undefined") {
+            localStorage.removeItem("token")
+            localStorage.removeItem("user")
+        }
+    },
+
+    getCurrentUser(): UserProfile | null {
+        if (typeof window !== "undefined") {
+            const userStr = localStorage.getItem("user")
+            return userStr ? JSON.parse(userStr) : null
+        }
+        return null
+    },
+
+    isAuthenticated(): boolean {
+        return getToken() !== null
+    },
+
+    async getProfile(): Promise<UserProfile> {
+        const response = await fetch(`${API_BASE_URL}/users/me`, {
+            headers: getHeaders(getToken() || undefined),
+        })
+        return handleResponse<UserProfile>(response)
     },
 }

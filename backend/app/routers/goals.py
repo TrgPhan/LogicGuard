@@ -37,7 +37,23 @@ async def create_new_goal(
     """
     Create a new goal with rubric text and key constraints.
     Automatically extracts criteria using LLM (Gemini).
+    Supports both free-text rubric input and checkbox selections.
     """
+    # Convert selected rubrics to rubric text if needed
+    rubric_text = goal_data.rubric_text
+    if not rubric_text and goal_data.selected_rubrics:
+        # Construct rubric text from selected checkboxes
+        rubric_text = "\n".join([
+            f"{idx + 1}. {item}"
+            for idx, item in enumerate(goal_data.selected_rubrics)
+        ])
+    
+    if not rubric_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either rubric_text or selected_rubrics must be provided"
+        )
+    
     # Get writing type context if provided
     writing_type_name = None
     if goal_data.writing_type_id:
@@ -51,7 +67,7 @@ async def create_new_goal(
     
     # Extract criteria from rubric text using LLM
     llm_result = await llm_service.extract_criteria_from_rubric(
-        rubric_text=goal_data.rubric_text,
+        rubric_text=rubric_text,
         writing_type=writing_type_name,
         key_constraints=goal_data.key_constraints
     )
@@ -61,7 +77,7 @@ async def create_new_goal(
         user_id=current_user.id,
         writing_type_id=goal_data.writing_type_id,
         writing_type_custom=goal_data.writing_type_custom,
-        rubric_text=goal_data.rubric_text,
+        rubric_text=rubric_text,  # Use constructed or provided rubric text
         key_constraints=goal_data.key_constraints,
         extracted_criteria=llm_result  # Store full LLM result
     )
@@ -147,8 +163,23 @@ async def preview_goal_extraction(
     2. Review weights and mandatory flags
     3. Adjust rubric text before final creation
     
+    Supports both free-text rubric input and checkbox selections.
     Perfect for Task 1: Context Setup - validating Goal Objects
     """
+    # Convert selected rubrics to rubric text if needed
+    rubric_text = request.rubric_text
+    if not rubric_text and request.selected_rubrics:
+        rubric_text = "\n".join([
+            f"{idx + 1}. {item}"
+            for idx, item in enumerate(request.selected_rubrics)
+        ])
+    
+    if not rubric_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either rubric_text or selected_rubrics must be provided"
+        )
+    
     # Get writing type context
     writing_type_name = None
     if request.writing_type_id:
@@ -162,7 +193,7 @@ async def preview_goal_extraction(
     
     # Extract criteria using LLM
     llm_result = await llm_service.extract_criteria_from_rubric(
-        rubric_text=request.rubric_text,
+        rubric_text=rubric_text,
         writing_type=writing_type_name,
         key_constraints=request.key_constraints
     )

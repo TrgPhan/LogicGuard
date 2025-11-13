@@ -7,8 +7,19 @@ from uuid import UUID
 class GoalCreate(BaseModel):
     writing_type_id: Optional[UUID] = None  # Reference to predefined writing type
     writing_type_custom: Optional[str] = None  # Custom writing type name
-    rubric_text: str = Field(..., min_length=1, description="The rubric text to extract criteria from")
+    rubric_text: Optional[str] = Field(None, min_length=1, description="The rubric text to extract criteria from")
+    selected_rubrics: Optional[List[str]] = None  # Selected rubric checkboxes from UI
     key_constraints: Optional[List[str]] = None  # List of constraint strings
+    
+    class Config:
+        # Custom validation to ensure either rubric_text or selected_rubrics is provided
+        @staticmethod
+        def validate_rubric_input(values):
+            rubric_text = values.get('rubric_text')
+            selected_rubrics = values.get('selected_rubrics')
+            if not rubric_text and not selected_rubrics:
+                raise ValueError('Either rubric_text or selected_rubrics must be provided')
+            return values
 
 
 class GoalResponse(BaseModel):
@@ -29,6 +40,7 @@ class GoalUpdate(BaseModel):
     writing_type_id: Optional[UUID] = None
     writing_type_custom: Optional[str] = None
     rubric_text: Optional[str] = Field(None, min_length=1)
+    selected_rubrics: Optional[List[str]] = None
     key_constraints: Optional[List[str]] = None
 
 

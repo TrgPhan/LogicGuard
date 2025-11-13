@@ -3,6 +3,7 @@
 import type React from "react"
 import { DocumentProvider } from "@/lib/document-context"
 import { DashboardLayout } from "@/components/dashboard-layout"
+import { ProtectedRoute } from "@/components/protected-route"
 
 export default function DashboardPageLayout({
   children,
@@ -10,8 +11,10 @@ export default function DashboardPageLayout({
   children: React.ReactNode
 }) {
   return (
-    <DocumentProvider>
-      <DashboardLayout>{children}</DashboardLayout>
-    </DocumentProvider>
+    <ProtectedRoute>
+      <DocumentProvider>
+        <DashboardLayout>{children}</DashboardLayout>
+      </DocumentProvider>
+    </ProtectedRoute>
   )
 }
