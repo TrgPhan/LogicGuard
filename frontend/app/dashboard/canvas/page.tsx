@@ -240,11 +240,10 @@ export default function CanvasPage() {
           </Button>
           <Button
             onClick={handleAnalyze}
-            className={`gap-2 ${
-              analysisActive
+            className={`gap-2 ${analysisActive
                 ? "bg-blue-600 hover:bg-blue-700"
                 : "bg-[#37322F] hover:bg-[#37322F]/90"
-            }`}
+              }`}
           >
             <Sparkles className="h-4 w-4" />
             {analysisActive ? "Analysis Active" : "Analyze"}
@@ -287,46 +286,46 @@ export default function CanvasPage() {
                 <CardContent className="space-y-2">
                   <div className="text-sm space-y-2">
                     <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
-                      <input 
-                        type="radio" 
-                        id="essay" 
-                        name="writing-type" 
+                      <input
+                        type="radio"
+                        id="essay"
+                        name="writing-type"
                         checked={writingType === "essay"}
                         onChange={() => setWritingType("essay")}
-                        className="h-4 w-4" 
+                        className="h-4 w-4"
                       />
                       <label htmlFor="essay" className="text-[#37322F] cursor-pointer">Essay</label>
                     </div>
                     <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
-                      <input 
-                        type="radio" 
-                        id="research" 
-                        name="writing-type" 
+                      <input
+                        type="radio"
+                        id="research"
+                        name="writing-type"
                         checked={writingType === "research"}
                         onChange={() => setWritingType("research")}
-                        className="h-4 w-4" 
+                        className="h-4 w-4"
                       />
                       <label htmlFor="research" className="text-[#37322F] cursor-pointer">Research Paper</label>
                     </div>
                     <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
-                      <input 
-                        type="radio" 
-                        id="proposal" 
-                        name="writing-type" 
+                      <input
+                        type="radio"
+                        id="proposal"
+                        name="writing-type"
                         checked={writingType === "proposal"}
                         onChange={() => setWritingType("proposal")}
-                        className="h-4 w-4" 
+                        className="h-4 w-4"
                       />
                       <label htmlFor="proposal" className="text-[#37322F] cursor-pointer">Business Proposal</label>
                     </div>
                     <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
-                      <input 
-                        type="radio" 
-                        id="review" 
-                        name="writing-type" 
+                      <input
+                        type="radio"
+                        id="review"
+                        name="writing-type"
                         checked={writingType === "review"}
                         onChange={() => setWritingType("review")}
-                        className="h-4 w-4" 
+                        className="h-4 w-4"
                       />
                       <label htmlFor="review" className="text-[#37322F] cursor-pointer">Literature Review</label>
                     </div>

@@ -40,9 +40,9 @@ const issueTypeLabels: Record<string, string> = {
   clarity_issue: "Clarity Issue",
 }
 
-export function RichTextEditor({ 
-  onContentChange, 
-  initialContent, 
+export function RichTextEditor({
+  onContentChange,
+  initialContent,
   analysisActive = false,
   analysisIssues = [],
   onSuggestionAccept
@@ -73,12 +73,12 @@ export function RichTextEditor({
     const currentContent = editor.getHTML()
     const textToReplace = issue.text
     const replacement = issue.suggestion
-    
+
     const newContent = currentContent.replace(
       new RegExp(textToReplace.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
       `<span class="bg-green-100 text-green-700 font-semibold animate-pulse">${replacement}</span>`
     )
-    
+
     editor.commands.setContent(newContent)
     onContentChange?.(newContent)
 
@@ -105,7 +105,7 @@ export function RichTextEditor({
       const text = issue.text || "error"
       const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const regex = new RegExp(`(${escapedText})`, "g")
-      
+
       html = html.replace(
         regex,
         `<span class="underline decoration-red-500 decoration-2 bg-red-100 cursor-pointer hover:bg-red-200 transition-all relative group px-0.5 rounded issue-highlight" data-issue-id="${issue.id}" data-issue-type="${issueTypeLabels[issue.type]}">${text}<span class="invisible group-hover:visible absolute bottom-full left-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-50 pointer-events-none">${issueTypeLabels[issue.type]}</span></span>`
@@ -199,12 +199,11 @@ export function RichTextEditor({
         </div>
       </CardHeader>
       <CardContent className="p-6">
-        <div 
-          className={`min-h-[500px] p-4 rounded border focus-within:ring-2 ${
-            analysisActive 
-              ? 'bg-amber-50 border-amber-200 focus-within:ring-amber-300' 
+        <div
+          className={`min-h-[500px] p-4 rounded border focus-within:ring-2 ${analysisActive
+              ? 'bg-amber-50 border-amber-200 focus-within:ring-amber-300'
               : 'bg-white border-[rgba(55,50,47,0.12)] focus-within:ring-[#37322F]/20'
-          }`}
+            }`}
           onClick={(e) => {
             const target = e.target as HTMLElement
             if (target.classList.contains('issue-highlight')) {
@@ -219,7 +218,7 @@ export function RichTextEditor({
           }}
         >
           {analysisActive && analysisIssues.length > 0 ? (
-            <div 
+            <div
               className="prose prose-sm max-w-none text-[#37322F]"
               dangerouslySetInnerHTML={{ __html: renderContentWithHighlights() || editor.getHTML() }}
             />
