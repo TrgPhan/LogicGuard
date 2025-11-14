@@ -109,12 +109,11 @@ export function ContextSetup({ onApply }: ContextSetupProps) {
     try {
       // Create goal with selected options
       const goal = await EnhancedGoalsAPI.create({
+        writing_type_id: selectedTypeId !== "academic_essay" ? selectedTypeId : undefined,
         writing_type_custom: selectedType.name,
-        selected_rubrics: selectedRubrics,
-        key_constraints: selectedConstraints,
+        selected_rubrics: selectedRubrics.length > 0 ? selectedRubrics : undefined,
+        key_constraints: selectedConstraints.length > 0 ? selectedConstraints : undefined,
       })
-
-      console.log("Goal created successfully:", goal)
 
       // Call parent callback
       onApply?.({

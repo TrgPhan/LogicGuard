@@ -5,25 +5,40 @@ import { useRouter } from "next/navigation"
 import { useDocument, type Document } from "@/lib/document-context"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { FileText, Plus, MoreVertical } from "lucide-react"
+import { FileText, Plus, MoreVertical, Loader2 } from "lucide-react"
 import { DocxUploadButton } from "@/components/docx-upload-button"
+import { DocumentsAPI } from "@/lib/api-service"
+import { formatDistanceToNow } from "date-fns"
 
 export default function DocumentsPage() {
   const router = useRouter()
   const { setSelectedDocument, documents, setDocuments } = useDocument()
   const [isLoading, setIsLoading] = useState(false)
-
-  const mockDocuments: Document[] = [
-    { id: "1", title: "Research Paper Draft", date: "2 hours ago", score: 92, words: 2450 },
-    { id: "2", title: "Essay on Climate Change", date: "Yesterday", score: 85, words: 1820 },
-    { id: "3", title: "Business Proposal", date: "3 days ago", score: 78, words: 3200 },
-    { id: "4", title: "Literature Review", date: "1 week ago", score: 88, words: 4100 },
-    { id: "5", title: "Case Study Analysis", date: "2 weeks ago", score: 91, words: 2900 },
-  ]
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setDocuments(mockDocuments)
+    fetchDocuments()
   }, [])
+
+  const fetchDocuments = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const docs = await DocumentsAPI.getAll()
+      const formattedDocs = docs.map(doc => ({
+        id: doc.id,
+        title: doc.title,
+        date: formatDistanceToNow(new Date(doc.updated_at), { addSuffix: true }),
+        words: doc.word_count,
+      }))
+      setDocuments(formattedDocs)
+    } catch (err: any) {
+      console.error("Failed to fetch documents:", err)
+      setError(err.message || "Failed to load documents")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleDocumentClick = (doc: Document) => {
     setSelectedDocument(doc)
@@ -33,22 +48,57 @@ export default function DocumentsPage() {
     router.push(`/dashboard/canvas?${params.toString()}`)
   }
 
-  const handleContentImport = (content: string, fileName: string) => {
-    const newDoc: Document = {
-      id: Date.now().toString(),
-      title: fileName.replace(".docx", ""),
-      content: content,
-      date: "Just now",
-      score: 0,
-      words: content.split(" ").length,
+  const handleContentImport = async (content: string, fileName: string) => {
+    try {
+      const newDoc = await DocumentsAPI.create({
+        title: fileName.replace(".docx", ""),
+        content_full: content,
+      })
+      
+      const formattedDoc: Document = {
+        id: newDoc.id,
+        title: newDoc.title,
+        content: newDoc.content_full,
+        date: "Just now",
+        words: newDoc.word_count,
+      }
+
+      setSelectedDocument(formattedDoc)
+      setDocuments([formattedDoc, ...documents])
+
+      const params = new URLSearchParams()
+      params.set("docId", newDoc.id)
+      router.push(`/dashboard/canvas?${params.toString()}`)
+    } catch (err: any) {
+      console.error("Failed to create document:", err)
+      setError(err.message || "Failed to import document")
     }
+  }
 
-    setSelectedDocument(newDoc)
-    setDocuments([newDoc, ...documents])
+  const handleCreateNew = async () => {
+    try {
+      const newDoc = await DocumentsAPI.create({
+        title: "Untitled Document",
+        content_full: "",
+      })
+      
+      const formattedDoc: Document = {
+        id: newDoc.id,
+        title: newDoc.title,
+        date: "Just now",
+        words: 0,
+      }
 
-    const params = new URLSearchParams()
-    params.set("docId", newDoc.id)
-    router.push(`/dashboard/canvas?${params.toString()}`)
+      setSelectedDocument(formattedDoc)
+      setDocuments([formattedDoc, ...documents])
+
+      const params = new URLSearchParams()
+      params.set("docId", newDoc.id)
+      router.push(`/dashboard/canvas?${params.toString()}`)
+    } catch (err: any) {
+      console.error("Failed to create document:", err)
+      setError(err.message || "Failed to create document")
+    }
   }
 
   return (
@@ -60,14 +110,34 @@ export default function DocumentsPage() {
         </div>
         <div className="flex gap-2">
           <DocxUploadButton onContentParsed={handleContentImport} />
-          <Button className="gap-2 bg-[#37322F] hover:bg-[#37322F]/90">
+          <Button onClick={handleCreateNew} className="gap-2 bg-[#37322F] hover:bg-[#37322F]/90">
             <Plus className="h-4 w-4" />
             New Document
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-[#37322F]" />
+        </div>
+      )}
+
+      {!isLoading && documents.length === 0 && (
+        <div className="text-center py-12">
+          <FileText className="h-12 w-12 text-[#605A57] mx-auto mb-4" />
+          <p className="text-[#605A57]">No documents yet. Create your first one!</p>
+        </div>
+      )}
+
+      {!isLoading && documents.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {documents.map((doc) => (
           <Card
             key={doc.id}
@@ -111,7 +181,8 @@ export default function DocumentsPage() {
             </CardContent>
           </Card>
         ))}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

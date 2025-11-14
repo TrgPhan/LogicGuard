@@ -4,37 +4,10 @@ import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useDocument } from "@/lib/document-context"
 import { Button } from "@/components/ui/button"
-import { Save, Download, ChevronLeft } from "lucide-react"
+import { Save, Download, ChevronLeft, Loader2 } from "lucide-react"
 import { RichTextEditor } from "@/components/rich-text-editor"
 import { ContextSetup } from "@/components/context-setup"
-
-const mockDocuments: Record<string, { title: string; content: string }> = {
-  "1": {
-    title: "Research Paper Draft",
-    content:
-      "<p>This is a placeholder for your Research Paper Draft. The logic checking system has identified key points that align with your goal rubric and maintained your writing constraints.</p>",
-  },
-  "2": {
-    title: "Essay on Climate Change",
-    content:
-      "<p>Climate change represents one of the most pressing challenges of our time. This essay explores the multifaceted impacts and proposed solutions.</p>",
-  },
-  "3": {
-    title: "Business Proposal",
-    content:
-      "<p>Our business proposal outlines a comprehensive strategy for market expansion and revenue growth through strategic partnerships.</p>",
-  },
-  "4": {
-    title: "Literature Review",
-    content:
-      "<p>This literature review synthesizes recent research findings in the field, identifying key themes and gaps in current knowledge.</p>",
-  },
-  "5": {
-    title: "Case Study Analysis",
-    content:
-      "<p>The following case study demonstrates the practical application of theoretical frameworks in a real-world business scenario.</p>",
-  },
-}
+import { DocumentsAPI } from "@/lib/api-service"
 
 export default function CanvasPage() {
   const router = useRouter()
@@ -45,6 +18,7 @@ export default function CanvasPage() {
   const [currentDoc, setCurrentDoc] = useState<{ title: string; content: string } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const docId = searchParams.get("docId") || selectedDocumentId
 
@@ -56,15 +30,24 @@ export default function CanvasPage() {
 
   const fetchDocument = async (documentId: string) => {
     setIsLoading(true)
+    setError(null)
     try {
-      const doc = mockDocuments[documentId] || {
-        title: selectedDocument?.title || "Untitled Document",
-        content: selectedDocument?.content || ""
+      const doc = await DocumentsAPI.getById(documentId)
+      setCurrentDoc({
+        title: doc.title,
+        content: doc.content_full || ""
+      })
+      setEditorContent(doc.content_full || "")
+    } catch (err: any) {
+      console.error("Failed to fetch document:", err)
+      setError(err.message || "Failed to load document")
+      if (selectedDocument) {
+        setCurrentDoc({
+          title: selectedDocument.title,
+          content: selectedDocument.content || ""
+        })
+        setEditorContent(selectedDocument.content || "")
       }
-      setCurrentDoc(doc)
-      setEditorContent(doc.content)
-    } catch (error) {
-      console.error("Failed to fetch document:", error)
     } finally {
       setIsLoading(false)
     }
@@ -74,17 +57,33 @@ export default function CanvasPage() {
     if (!docId) return
 
     setIsSaving(true)
+    setError(null)
     try {
-      // API integration point: PUT /api/documents/{id}
-    } catch (error) {
-      console.error("Failed to save document:", error)
+      await DocumentsAPI.update(docId, {
+        content_full: editorContent,
+      })
+      // Success feedback could be added here
+    } catch (err: any) {
+      console.error("Failed to save document:", err)
+      setError(err.message || "Failed to save document")
     } finally {
       setIsSaving(false)
     }
   }
 
   const handleExport = () => {
-    // Export functionality
+    if (!currentDoc) return
+    
+    // Create a Blob from the HTML content
+    const blob = new Blob([editorContent], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${currentDoc.title}.html`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   if (!docId) {
@@ -104,14 +103,20 @@ export default function CanvasPage() {
 
   if (isLoading) {
     return (
-      <div className="p-8 space-y-6 text-center">
-        <p className="text-[#605A57]">Loading document...</p>
+      <div className="p-8 space-y-6 flex justify-center items-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#37322F]" />
       </div>
     )
   }
 
   return (
     <div className="p-8 space-y-6">
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
+      
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Writing Canvas</h1>

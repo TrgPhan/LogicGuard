@@ -2,6 +2,27 @@ import type { Document } from "./document-context"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 
+// Backend API Response Types (matching backend schemas)
+export interface DocumentResponse {
+    id: string
+    user_id: string
+    goal_id: string | null
+    title: string
+    content_full: string
+    version: number
+    word_count: number
+    created_at: string // ISO datetime
+    updated_at: string // ISO datetime
+}
+
+export interface DocumentListResponse {
+    id: string
+    title: string
+    word_count: number
+    created_at: string
+    updated_at: string
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
         // Handle authentication errors
@@ -41,42 +62,42 @@ function getToken(): string | null {
 }
 
 export const DocumentsAPI = {
-    async getAll(): Promise<Document[]> {
+    async getAll(): Promise<DocumentResponse[]> {
         const response = await fetch(`${API_BASE_URL}/documents`, {
-            headers: getHeaders(),
+            headers: getHeaders(getToken() || undefined),
         })
-        return handleResponse<Document[]>(response)
+        return handleResponse<DocumentResponse[]>(response)
     },
 
-    async getById(id: string): Promise<Document> {
+    async getById(id: string): Promise<DocumentResponse> {
         const response = await fetch(`${API_BASE_URL}/documents/${id}`, {
-            headers: getHeaders(),
+            headers: getHeaders(getToken() || undefined),
         })
-        return handleResponse<Document>(response)
+        return handleResponse<DocumentResponse>(response)
     },
 
-    async create(data: Partial<Document>): Promise<Document> {
+    async create(data: Partial<DocumentResponse>): Promise<DocumentResponse> {
         const response = await fetch(`${API_BASE_URL}/documents`, {
             method: "POST",
-            headers: getHeaders(),
+            headers: getHeaders(getToken() || undefined),
             body: JSON.stringify(data),
         })
-        return handleResponse<Document>(response)
+        return handleResponse<DocumentResponse>(response)
     },
 
-    async update(id: string, data: Partial<Document>): Promise<Document> {
+    async update(id: string, data: Partial<DocumentResponse>): Promise<DocumentResponse> {
         const response = await fetch(`${API_BASE_URL}/documents/${id}`, {
             method: "PUT",
-            headers: getHeaders(),
+            headers: getHeaders(getToken() || undefined),
             body: JSON.stringify(data),
         })
-        return handleResponse<Document>(response)
+        return handleResponse<DocumentResponse>(response)
     },
 
     async delete(id: string): Promise<void> {
         const response = await fetch(`${API_BASE_URL}/documents/${id}`, {
             method: "DELETE",
-            headers: getHeaders(),
+            headers: getHeaders(getToken() || undefined),
         })
         return handleResponse<void>(response)
     },
@@ -93,7 +114,7 @@ export interface FeedbackItem {
 export const FeedbackAPI = {
     async getByDocumentId(documentId: string): Promise<FeedbackItem[]> {
         const response = await fetch(`${API_BASE_URL}/documents/${documentId}/feedback`, {
-            headers: getHeaders(),
+            headers: getHeaders(getToken() || undefined),
         })
         return handleResponse<FeedbackItem[]>(response)
     },
@@ -114,7 +135,7 @@ export interface GoalsData {
 export const GoalsAPI = {
     async getByDocumentId(documentId: string): Promise<GoalsData> {
         const response = await fetch(`${API_BASE_URL}/documents/${documentId}/goals`, {
-            headers: getHeaders(),
+            headers: getHeaders(getToken() || undefined),
         })
         return handleResponse<GoalsData>(response)
     },
@@ -124,7 +145,7 @@ export const AnalysisAPI = {
     async analyze(documentId: string): Promise<{ status: string }> {
         const response = await fetch(`${API_BASE_URL}/documents/${documentId}/analyze`, {
             method: "POST",
-            headers: getHeaders(),
+            headers: getHeaders(getToken() || undefined),
         })
         return handleResponse<{ status: string }>(response)
     },
@@ -182,14 +203,19 @@ export const PredefinedOptionsAPI = {
 // ============================================================================
 
 export interface GoalCreateRequest {
-    writing_type_custom: string
+    writing_type_id?: string | null
+    writing_type_custom?: string | null
     rubric_text?: string
     selected_rubrics?: string[]
-    key_constraints: string[]
+    key_constraints?: string[]
 }
 
-export interface GoalPreviewRequest extends GoalCreateRequest {
-    writing_type_id?: string
+export interface GoalPreviewRequest {
+    writing_type_id?: string | null
+    writing_type_custom?: string | null
+    rubric_text?: string
+    selected_rubrics?: string[]
+    key_constraints?: string[]
 }
 
 export interface CriterionPreview {
@@ -235,7 +261,7 @@ export interface GoalDetailResponse extends Goal {
 
 export const EnhancedGoalsAPI = {
     async create(data: GoalCreateRequest): Promise<GoalDetailResponse> {
-        const response = await fetch(`${API_BASE_URL.replace('/v1', '')}/goals/`, {
+        const response = await fetch(`${API_BASE_URL}/goals/`, {
             method: "POST",
             headers: getHeaders(getToken() || undefined),
             body: JSON.stringify(data),
@@ -244,7 +270,7 @@ export const EnhancedGoalsAPI = {
     },
 
     async preview(data: GoalPreviewRequest): Promise<GoalPreviewResponse> {
-        const response = await fetch(`${API_BASE_URL.replace('/v1', '')}/goals/preview`, {
+        const response = await fetch(`${API_BASE_URL}/goals/preview`, {
             method: "POST",
             headers: getHeaders(getToken() || undefined),
             body: JSON.stringify(data),
@@ -253,21 +279,21 @@ export const EnhancedGoalsAPI = {
     },
 
     async list(): Promise<Goal[]> {
-        const response = await fetch(`${API_BASE_URL.replace('/v1', '')}/goals/`, {
+        const response = await fetch(`${API_BASE_URL}/goals/`, {
             headers: getHeaders(getToken() || undefined),
         })
         return handleResponse<Goal[]>(response)
     },
 
     async getById(goalId: string): Promise<GoalDetailResponse> {
-        const response = await fetch(`${API_BASE_URL.replace('/v1', '')}/goals/${goalId}`, {
+        const response = await fetch(`${API_BASE_URL}/goals/${goalId}`, {
             headers: getHeaders(getToken() || undefined),
         })
         return handleResponse<GoalDetailResponse>(response)
     },
 
     async delete(goalId: string): Promise<void> {
-        const response = await fetch(`${API_BASE_URL.replace('/v1', '')}/goals/${goalId}`, {
+        const response = await fetch(`${API_BASE_URL}/goals/${goalId}`, {
             method: "DELETE",
             headers: getHeaders(getToken() || undefined),
         })
