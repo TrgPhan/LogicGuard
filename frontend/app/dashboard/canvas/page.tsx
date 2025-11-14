@@ -102,12 +102,12 @@ export default function CanvasPage() {
     setIsSaving(true)
     setSaveSuccess(false)
     setError(null)
-    
+
     try {
       await DocumentsAPI.update(docId, {
         content_full: editorContent,
       })
-      
+
       initialContentRef.current = editorContent
       setHasUnsavedChanges(false)
       setSaveSuccess(true)
@@ -140,7 +140,7 @@ export default function CanvasPage() {
       await DocumentsAPI.update(docId, {
         goal_id: contextData.goal.id,
       })
-      
+
       setCurrentDoc(prev => prev ? { ...prev, goalId: contextData.goal.id } : null)
     } catch (err: any) {
       setError(err.message || "Failed to link goal to document")
@@ -153,8 +153,8 @@ export default function CanvasPage() {
         <div>
           <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Writing Canvas</h1>
           <p className="text-[#605A57] mb-6">Please select a document to start writing</p>
-          <Button 
-            onClick={() => handleNavigation("/dashboard/documents")} 
+          <Button
+            onClick={() => handleNavigation("/dashboard/documents")}
             className="bg-[#37322F] hover:bg-[#37322F]/90"
           >
             <ChevronLeft className="h-4 w-4 mr-2" />
