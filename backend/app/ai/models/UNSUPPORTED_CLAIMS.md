@@ -153,6 +153,6 @@ Same as `undefinedTerms.py`:
 
 ```bash
 # .env file
-GEMINI_API_KEY=your-api-key-here
+GEMINI_API_KEY_UNSUPPORTED_CLAIMSGEMINI_API_KEY=your-api-key-here
 GEMINI_MODEL=gemini-2.5-flash
 ```

@@ -46,13 +46,12 @@ except ImportError:
 load_dotenv()
 
 # Configure Gemini
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY_UNSUPPORTED_CLAIMS = os.getenv("GEMINI_API_KEY_UNSUPPORTED_CLAIMS")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY not found in environment variables")
-
-genai.configure(api_key=GEMINI_API_KEY)
+if not GEMINI_API_KEY_UNSUPPORTED_CLAIMS:
+    raise ValueError("GEMINI_API_KEY_UNSUPPORTED_CLAIMS not found in environment variables")
+genai.configure(api_key=GEMINI_API_KEY_UNSUPPORTED_CLAIMS)
 
 
 def check_unsupported_claims(context: Dict[str, Any], content: str) -> Dict[str, Any]:
