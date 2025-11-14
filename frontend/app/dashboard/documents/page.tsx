@@ -54,7 +54,7 @@ export default function DocumentsPage() {
         title: fileName.replace(".docx", ""),
         content_full: content,
       })
-      
+
       const formattedDoc: Document = {
         id: newDoc.id,
         title: newDoc.title,
@@ -81,7 +81,7 @@ export default function DocumentsPage() {
         title: "Untitled Document",
         content_full: "",
       })
-      
+
       const formattedDoc: Document = {
         id: newDoc.id,
         title: newDoc.title,
@@ -138,49 +138,49 @@ export default function DocumentsPage() {
 
       {!isLoading && documents.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {documents.map((doc) => (
-          <Card
-            key={doc.id}
-            className="border-[rgba(55,50,47,0.12)] hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => handleDocumentClick(doc)}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="p-2 bg-[#F7F5F3] rounded-lg">
-                  <FileText className="h-6 w-6 text-[#37322F]" />
+          {documents.map((doc) => (
+            <Card
+              key={doc.id}
+              className="border-[rgba(55,50,47,0.12)] hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => handleDocumentClick(doc)}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="p-2 bg-[#F7F5F3] rounded-lg">
+                    <FileText className="h-6 w-6 text-[#37322F]" />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                    }}
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                  }}
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </div>
-              <h3 className="font-semibold text-[#37322F] mb-2 line-clamp-2">{doc.title}</h3>
-              <p className="text-sm text-[#605A57] mb-4">{doc.date}</p>
-              <div className="flex items-center justify-between pt-4 border-t border-[rgba(55,50,47,0.12)]">
-                {/* Logic Score - Hidden until Analysis API is implemented
+                <h3 className="font-semibold text-[#37322F] mb-2 line-clamp-2">{doc.title}</h3>
+                <p className="text-sm text-[#605A57] mb-4">{doc.date}</p>
+                <div className="flex items-center justify-between pt-4 border-t border-[rgba(55,50,47,0.12)]">
+                  {/* Logic Score - Hidden until Analysis API is implemented
                 <div>
                   <p className="text-xs text-[#605A57]">Logic Score</p>
                   <p className="text-lg font-semibold text-[#37322F]">{doc.score}%</p>
                 </div>
                 */}
-                <div>
-                  <p className="text-xs text-[#605A57]">Words</p>
-                  <p className="text-lg font-semibold text-[#37322F]">{doc.words?.toLocaleString() || 0}</p>
+                  <div>
+                    <p className="text-xs text-[#605A57]">Words</p>
+                    <p className="text-lg font-semibold text-[#37322F]">{doc.words?.toLocaleString() || 0}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-[#605A57]">Last Updated</p>
+                    <p className="text-sm text-[#605A57]">{doc.date}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-[#605A57]">Last Updated</p>
-                  <p className="text-sm text-[#605A57]">{doc.date}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
     </div>

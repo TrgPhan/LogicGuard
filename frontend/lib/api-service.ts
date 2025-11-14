@@ -345,20 +345,20 @@ export const AuthAPI = {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(credentials),
         })
-        
+
         if (!response.ok) {
             const error = await response.json().catch(() => ({ detail: "Login failed" }))
             throw new Error(error.detail || "Invalid email or password")
         }
-        
+
         const data = await response.json()
-        
+
         // Save token and user info to localStorage
         if (typeof window !== "undefined") {
             localStorage.setItem("token", data.access_token)
             localStorage.setItem("user", JSON.stringify(data.user))
         }
-        
+
         return data
     },
 
@@ -368,20 +368,20 @@ export const AuthAPI = {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(credentials),
         })
-        
+
         if (!response.ok) {
             const error = await response.json().catch(() => ({ detail: "Registration failed" }))
             throw new Error(error.detail || "Registration failed")
         }
-        
+
         const data = await response.json()
-        
+
         // Auto-login after successful registration
         if (typeof window !== "undefined") {
             localStorage.setItem("token", data.access_token)
             localStorage.setItem("user", JSON.stringify(data.user))
         }
-        
+
         return data
     },
 

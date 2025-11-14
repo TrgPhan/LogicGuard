@@ -14,7 +14,7 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
-  
+
   // Preferences state
   const [preferences, setPreferences] = useState({
     realtimeChecking: true,
@@ -89,11 +89,10 @@ export default function SettingsPage() {
       </div>
 
       {message && (
-        <div className={`px-4 py-3 rounded ${
-          message.type === "success" 
+        <div className={`px-4 py-3 rounded ${message.type === "success"
             ? "bg-green-50 border border-green-200 text-green-700"
             : "bg-red-50 border border-red-200 text-red-700"
-        }`}>
+          }`}>
           {message.text}
         </div>
       )}
@@ -107,16 +106,16 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input 
-              id="email" 
-              type="email" 
+            <Input
+              id="email"
+              type="email"
               value={profile.email}
               disabled
               className="bg-gray-50"
             />
             <p className="text-xs text-[#605A57]">Email cannot be changed</p>
           </div>
-          <Button 
+          <Button
             onClick={handleSaveProfile}
             disabled={isSaving}
             className="bg-[#37322F] hover:bg-[#37322F]/90"
@@ -138,7 +137,7 @@ export default function SettingsPage() {
               <Label>Real-time Logic Checking</Label>
               <p className="text-sm text-[#605A57]">Check for logic issues as you type (Requires Analysis API)</p>
             </div>
-            <Switch 
+            <Switch
               checked={preferences.realtimeChecking}
               onCheckedChange={(checked) => savePreferences({ ...preferences, realtimeChecking: checked })}
             />
@@ -148,7 +147,7 @@ export default function SettingsPage() {
               <Label>Auto-save</Label>
               <p className="text-sm text-[#605A57]">Automatically save your work every 30 seconds</p>
             </div>
-            <Switch 
+            <Switch
               checked={preferences.autoSave}
               onCheckedChange={(checked) => savePreferences({ ...preferences, autoSave: checked })}
             />
@@ -158,7 +157,7 @@ export default function SettingsPage() {
               <Label>Show Suggestions</Label>
               <p className="text-sm text-[#605A57]">Display improvement suggestions (Requires Feedback API)</p>
             </div>
-            <Switch 
+            <Switch
               checked={preferences.showSuggestions}
               onCheckedChange={(checked) => savePreferences({ ...preferences, showSuggestions: checked })}
             />
@@ -178,7 +177,7 @@ export default function SettingsPage() {
               <Label>Email Notifications</Label>
               <p className="text-sm text-[#605A57]">Receive updates via email</p>
             </div>
-            <Switch 
+            <Switch
               checked={preferences.emailNotifications}
               onCheckedChange={(checked) => savePreferences({ ...preferences, emailNotifications: checked })}
             />
@@ -188,7 +187,7 @@ export default function SettingsPage() {
               <Label>Weekly Reports</Label>
               <p className="text-sm text-[#605A57]">Get weekly progress summaries</p>
             </div>
-            <Switch 
+            <Switch
               checked={preferences.weeklyReports}
               onCheckedChange={(checked) => savePreferences({ ...preferences, weeklyReports: checked })}
             />

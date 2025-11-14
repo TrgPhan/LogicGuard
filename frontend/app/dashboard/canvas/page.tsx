@@ -73,7 +73,7 @@ export default function CanvasPage() {
 
   const handleExport = () => {
     if (!currentDoc) return
-    
+
     // Create a Blob from the HTML content
     const blob = new Blob([editorContent], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
@@ -116,7 +116,7 @@ export default function CanvasPage() {
           {error}
         </div>
       )}
-      
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Writing Canvas</h1>

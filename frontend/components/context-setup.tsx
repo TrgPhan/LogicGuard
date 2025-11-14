@@ -35,7 +35,7 @@ export function ContextSetup({ onApply }: ContextSetupProps) {
         setIsLoadingTypes(true)
         const types = await PredefinedOptionsAPI.getWritingTypes()
         setWritingTypes(types)
-        
+
         if (types.length > 0) {
           const defaultType = types[0]
           setSelectedTypeId(defaultType.id)
@@ -75,7 +75,7 @@ export function ContextSetup({ onApply }: ContextSetupProps) {
         setIsLoadingTypes(false)
       }
     }
-    
+
     loadWritingTypes()
   }, [])
 
@@ -222,8 +222,8 @@ export function ContextSetup({ onApply }: ContextSetupProps) {
         </CardContent>
       </Card>
 
-      <Button 
-        onClick={handleApply} 
+      <Button
+        onClick={handleApply}
         className="w-full bg-[#37322F] hover:bg-[#37322F]/90 text-white"
         disabled={loading || selectedRubrics.length === 0}
       >

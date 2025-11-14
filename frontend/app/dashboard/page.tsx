@@ -34,10 +34,10 @@ export default function DashboardPage() {
 
       // Fetch documents
       const docs = await DocumentsAPI.getAll()
-      
+
       // Calculate stats
       const totalWords = docs.reduce((sum, doc) => sum + (doc.word_count || 0), 0)
-      
+
       // Get recent 3 documents
       const sortedDocs = docs
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
