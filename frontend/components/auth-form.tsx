@@ -90,7 +90,6 @@ export function AuthForm({ mode }: AuthFormProps) {
         await AuthAPI.register({
           email: formData.email,
           password: formData.password,
-          full_name: formData.name,
         })
         
         setMessage({ type: "success", text: "Registration successful! Redirecting..." })
