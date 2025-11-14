@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useDocument } from "@/lib/document-context"
 import { Button } from "@/components/ui/button"
-import { Save, Download, ChevronLeft, Loader2 } from "lucide-react"
+import { Save, Download, ChevronLeft, Loader2, Check } from "lucide-react"
 import { RichTextEditor } from "@/components/rich-text-editor"
 import { ContextSetup } from "@/components/context-setup"
 import { DocumentsAPI } from "@/lib/api-service"
@@ -15,10 +15,13 @@ export default function CanvasPage() {
   const { selectedDocumentId, selectedDocument } = useDocument()
 
   const [editorContent, setEditorContent] = useState("")
-  const [currentDoc, setCurrentDoc] = useState<{ title: string; content: string } | null>(null)
+  const [currentDoc, setCurrentDoc] = useState<{ title: string; content: string; goalId?: string | null } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const initialContentRef = useRef<string>("")
 
   const docId = searchParams.get("docId") || selectedDocumentId
 
@@ -28,25 +31,65 @@ export default function CanvasPage() {
     }
   }, [docId])
 
+  // Track unsaved changes
+  useEffect(() => {
+    if (initialContentRef.current && editorContent !== initialContentRef.current) {
+      setHasUnsavedChanges(true)
+    } else {
+      setHasUnsavedChanges(false)
+    }
+  }, [editorContent])
+
+  // Warn before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = ""
+        return ""
+      }
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [hasUnsavedChanges])
+
+  // Intercept router navigation
+  const handleNavigation = (path: string) => {
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm(
+        "Bạn có thay đổi chưa được lưu. Bạn có chắc muốn rời đi mà không lưu không?"
+      )
+      if (!confirmed) return
+    }
+    router.push(path)
+  }
+
   const fetchDocument = async (documentId: string) => {
     setIsLoading(true)
     setError(null)
     try {
       const doc = await DocumentsAPI.getById(documentId)
+      const content = doc.content_full || ""
       setCurrentDoc({
         title: doc.title,
-        content: doc.content_full || ""
+        content: content,
+        goalId: doc.goal_id
       })
-      setEditorContent(doc.content_full || "")
+      setEditorContent(content)
+      initialContentRef.current = content
+      setHasUnsavedChanges(false)
     } catch (err: any) {
-      console.error("Failed to fetch document:", err)
       setError(err.message || "Failed to load document")
       if (selectedDocument) {
+        const content = selectedDocument.content || ""
         setCurrentDoc({
           title: selectedDocument.title,
-          content: selectedDocument.content || ""
+          content: content,
+          goalId: undefined
         })
-        setEditorContent(selectedDocument.content || "")
+        setEditorContent(content)
+        initialContentRef.current = content
       }
     } finally {
       setIsLoading(false)
@@ -57,14 +100,19 @@ export default function CanvasPage() {
     if (!docId) return
 
     setIsSaving(true)
+    setSaveSuccess(false)
     setError(null)
+    
     try {
       await DocumentsAPI.update(docId, {
         content_full: editorContent,
       })
-      // Success feedback could be added here
+      
+      initialContentRef.current = editorContent
+      setHasUnsavedChanges(false)
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 2000)
     } catch (err: any) {
-      console.error("Failed to save document:", err)
       setError(err.message || "Failed to save document")
     } finally {
       setIsSaving(false)
@@ -74,7 +122,6 @@ export default function CanvasPage() {
   const handleExport = () => {
     if (!currentDoc) return
 
-    // Create a Blob from the HTML content
     const blob = new Blob([editorContent], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -86,13 +133,30 @@ export default function CanvasPage() {
     URL.revokeObjectURL(url)
   }
 
+  const handleContextApply = async (contextData: any) => {
+    if (!docId || !contextData.goal) return
+
+    try {
+      await DocumentsAPI.update(docId, {
+        goal_id: contextData.goal.id,
+      })
+      
+      setCurrentDoc(prev => prev ? { ...prev, goalId: contextData.goal.id } : null)
+    } catch (err: any) {
+      setError(err.message || "Failed to link goal to document")
+    }
+  }
+
   if (!docId) {
     return (
       <div className="p-8 space-y-6 text-center">
         <div>
           <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Writing Canvas</h1>
           <p className="text-[#605A57] mb-6">Please select a document to start writing</p>
-          <Button onClick={() => router.push("/dashboard/documents")} className="bg-[#37322F] hover:bg-[#37322F]/90">
+          <Button 
+            onClick={() => handleNavigation("/dashboard/documents")} 
+            className="bg-[#37322F] hover:bg-[#37322F]/90"
+          >
             <ChevronLeft className="h-4 w-4 mr-2" />
             Back to Documents
           </Button>
@@ -129,10 +193,16 @@ export default function CanvasPage() {
             variant="outline"
             className="gap-2 bg-transparent"
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || !hasUnsavedChanges}
           >
-            <Save className="h-4 w-4" />
-            {isSaving ? "Saving..." : "Save Draft"}
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : saveSuccess ? (
+              <Check className="h-4 w-4 text-green-600" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {isSaving ? "Saving..." : saveSuccess ? "Saved!" : "Save Draft"}
           </Button>
           <Button
             className="gap-2 bg-[#37322F] hover:bg-[#37322F]/90"
@@ -153,7 +223,7 @@ export default function CanvasPage() {
         </div>
 
         <div className="space-y-4">
-          <ContextSetup />
+          <ContextSetup onApply={handleContextApply} />
         </div>
       </div>
     </div>

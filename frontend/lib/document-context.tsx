@@ -43,7 +43,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
         setSelectedDocumentIdState(id)
         setSelectedDocumentState(document)
       } catch (e) {
-        console.error("Failed to parse stored document:", e)
+        // Invalid stored data - ignore
       }
     }
 

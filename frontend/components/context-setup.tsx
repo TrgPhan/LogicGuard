@@ -44,7 +44,6 @@ export function ContextSetup({ onApply }: ContextSetupProps) {
           setSelectedConstraints(defaultType.default_constraints)
         }
       } catch (err) {
-        console.error("Failed to load writing types:", err)
         setError("Failed to load writing types. Using fallback options.")
         // Fallback to hardcoded options
         const fallbackType: PredefinedWritingType = {
@@ -123,7 +122,6 @@ export function ContextSetup({ onApply }: ContextSetupProps) {
         goal: goal,
       })
     } catch (err) {
-      console.error("Failed to create goal:", err)
       setError(err instanceof Error ? err.message : "Failed to create goal. Please try again.")
     } finally {
       setLoading(false)

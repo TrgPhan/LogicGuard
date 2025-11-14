@@ -57,7 +57,7 @@ export default function DashboardPage() {
         issuesFound: 0, // Will be available when Feedback API is ready
       })
     } catch (error) {
-      console.error("Failed to fetch dashboard data:", error)
+      // Silent fail - show empty dashboard
     } finally {
       setIsLoading(false)
     }

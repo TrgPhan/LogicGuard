@@ -35,7 +35,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         setIsAuthenticated(true)
       } catch (error) {
         // Token invalid or expired
-        console.error("Auth check failed:", error)
         AuthAPI.logout()
         if (typeof window !== "undefined") {
           sessionStorage.setItem("redirectAfterLogin", pathname)

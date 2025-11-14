@@ -33,7 +33,6 @@ export default function DocumentsPage() {
       }))
       setDocuments(formattedDocs)
     } catch (err: any) {
-      console.error("Failed to fetch documents:", err)
       setError(err.message || "Failed to load documents")
     } finally {
       setIsLoading(false)
@@ -70,7 +69,6 @@ export default function DocumentsPage() {
       params.set("docId", newDoc.id)
       router.push(`/dashboard/canvas?${params.toString()}`)
     } catch (err: any) {
-      console.error("Failed to create document:", err)
       setError(err.message || "Failed to import document")
     }
   }
@@ -96,7 +94,6 @@ export default function DocumentsPage() {
       params.set("docId", newDoc.id)
       router.push(`/dashboard/canvas?${params.toString()}`)
     } catch (err: any) {
-      console.error("Failed to create document:", err)
       setError(err.message || "Failed to create document")
     }
   }

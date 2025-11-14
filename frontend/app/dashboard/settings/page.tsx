@@ -37,7 +37,7 @@ export default function SettingsPage() {
         name: data.email.split('@')[0],
       })
     } catch (error) {
-      console.error("Failed to fetch profile:", error)
+      // Silent fail - user will see loading state
     } finally {
       setIsLoading(false)
     }
@@ -49,7 +49,7 @@ export default function SettingsPage() {
       try {
         setPreferences(JSON.parse(saved))
       } catch (e) {
-        console.error("Failed to parse preferences:", e)
+        // Invalid JSON - use defaults
       }
     }
   }
