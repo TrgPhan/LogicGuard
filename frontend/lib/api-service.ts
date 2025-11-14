@@ -292,6 +292,15 @@ export const EnhancedGoalsAPI = {
         return handleResponse<GoalDetailResponse>(response)
     },
 
+    async update(goalId: string, data: GoalCreateRequest): Promise<GoalDetailResponse> {
+        const response = await fetch(`${API_BASE_URL}/goals/${goalId}`, {
+            method: "PUT",
+            headers: getHeaders(getToken() || undefined),
+            body: JSON.stringify(data),
+        })
+        return handleResponse<GoalDetailResponse>(response)
+    },
+
     async delete(goalId: string): Promise<void> {
         const response = await fetch(`${API_BASE_URL}/goals/${goalId}`, {
             method: "DELETE",

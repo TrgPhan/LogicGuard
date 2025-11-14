@@ -1,19 +1,94 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from uuid import UUID
+import re
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.goal import Goal, RubricCriterion, WritingType
-from app.schemas.goal import GoalCreate, GoalResponse, GoalDetailResponse
+from app.schemas.goal import GoalCreate, GoalResponse, GoalDetailResponse, GoalUpdate
 from app.schemas.goal_preview import (
     GoalPreviewRequest, GoalPreviewResponse, CriterionPreview,
     GoalValidationRequest, GoalValidationResponse
 )
-from app.services.llm_service import llm_service
 
 router = APIRouter()
+
+
+def _extract_rubrics_from_text(text: str) -> List[str]:
+    """Normalize rubric text into individual chealist items."""
+    if not text:
+        return []
+    items = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # Remove bullet/numbering prefixes (e.g., "1.", "-", "•")
+        line = re.sub(r"^(?:\d+[\.)]|[-•])\s*", "", line)
+        if line:
+            items.append(line)
+    return items
+
+
+def _determine_rubrics(rubric_text: Optional[str], selected_rubrics: Optional[List[str]]) -> List[str]:
+    if selected_rubrics:
+        return [item.strip() for item in selected_rubrics if item.strip()]
+    if rubric_text:
+        return _extract_rubrics_from_text(rubric_text)
+    return []
+
+
+def _build_rubric_text(rubrics: List[str], fallback_text: Optional[str] = None) -> str:
+    if rubrics:
+        return "\n".join(f"{idx + 1}. {item}" for idx, item in enumerate(rubrics))
+    if fallback_text:
+        return fallback_text
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="At least one rubric item is required"
+    )
+
+
+def _build_extracted_payload(rubrics: List[str], writing_type_name: Optional[str]) -> dict:
+    return {
+        "writing_type": writing_type_name,
+        "criteria": [
+            {
+                "label": label,
+                "description": label,
+                "weight": 1,
+                "order_index": idx,
+                "is_mandatory": True,
+            }
+            for idx, label in enumerate(rubrics)
+        ],
+        "source": "manual",
+    }
+
+
+def _replace_goal_criteria(db: Session, goal: Goal, rubric_items: List[str]):
+    db.query(RubricCriterion).filter(RubricCriterion.goal_id == goal.id).delete()
+    for idx, label in enumerate(rubric_items):
+        db.add(
+            RubricCriterion(
+                goal_id=goal.id,
+                label=label,
+                description=label,
+                weight=1,
+                order_index=idx,
+                is_mandatory=True,
+            )
+        )
+
+
+def _resolve_writing_type_name(db: Session, writing_type_id: Optional[UUID], custom_name: Optional[str]) -> Optional[str]:
+    if writing_type_id:
+        writing_type = db.query(WritingType).filter(WritingType.id == writing_type_id).first()
+        if writing_type:
+            return writing_type.display_name
+    return custom_name
 
 
 @router.get("/", response_model=List[GoalResponse])
@@ -34,68 +109,30 @@ async def create_new_goal(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Create a new goal with rubric text and key constraints.
-    Automatically extracts criteria using LLM (Gemini).
-    Supports both free-text rubric input and checkbox selections.
-    """
-    # Convert selected rubrics to rubric text if needed
-    rubric_text = goal_data.rubric_text
-    if not rubric_text and goal_data.selected_rubrics:
-        # Construct rubric text from selected checkboxes
-        rubric_text = "\n".join([
-            f"{idx + 1}. {item}"
-            for idx, item in enumerate(goal_data.selected_rubrics)
-        ])
-    
-    if not rubric_text:
+    """Create a new goal without relying on external LLM services."""
+    rubric_items = _determine_rubrics(goal_data.rubric_text, goal_data.selected_rubrics)
+    if not rubric_items:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Either rubric_text or selected_rubrics must be provided"
         )
-    
-    # Get writing type context if provided
-    writing_type_name = None
-    if goal_data.writing_type_id:
-        writing_type = db.query(WritingType).filter(
-            WritingType.id == goal_data.writing_type_id
-        ).first()
-        if writing_type:
-            writing_type_name = writing_type.display_name
-    elif goal_data.writing_type_custom:
-        writing_type_name = goal_data.writing_type_custom
-    
-    # Extract criteria from rubric text using LLM
-    llm_result = await llm_service.extract_criteria_from_rubric(
-        rubric_text=rubric_text,
-        writing_type=writing_type_name,
-        key_constraints=goal_data.key_constraints
-    )
-    
-    # Create the goal
+
+    writing_type_name = _resolve_writing_type_name(db, goal_data.writing_type_id, goal_data.writing_type_custom)
+    rubric_text = _build_rubric_text(rubric_items, goal_data.rubric_text)
+    extracted_payload = _build_extracted_payload(rubric_items, writing_type_name)
+
     new_goal = Goal(
         user_id=current_user.id,
         writing_type_id=goal_data.writing_type_id,
         writing_type_custom=goal_data.writing_type_custom,
-        rubric_text=rubric_text,  # Use constructed or provided rubric text
+        rubric_text=rubric_text,
         key_constraints=goal_data.key_constraints,
-        extracted_criteria=llm_result  # Store full LLM result
+        extracted_criteria=extracted_payload
     )
     db.add(new_goal)
-    db.flush()  # Get the goal ID without committing
-    
-    # Create rubric criteria entries from LLM extraction
-    for criterion_data in llm_result.get("criteria", []):
-        rubric_criterion = RubricCriterion(
-            goal_id=new_goal.id,
-            label=criterion_data.get("label", "Unnamed criterion"),
-            description=criterion_data.get("description", ""),
-            weight=float(criterion_data.get("weight", 1.0)),
-            order_index=int(criterion_data.get("order_index", 0)),
-            is_mandatory=bool(criterion_data.get("is_mandatory", True))
-        )
-        db.add(rubric_criterion)
-    
+    db.flush()
+
+    _replace_goal_criteria(db, new_goal, rubric_items)
     db.commit()
     db.refresh(new_goal)
     return new_goal
@@ -121,6 +158,48 @@ def get_goal_detail(
             detail="Goal not found"
         )
     
+    return goal
+
+
+@router.put("/{goal_id}", response_model=GoalDetailResponse)
+def update_goal(
+    goal_id: UUID,
+    goal_data: GoalUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    goal = db.query(Goal).filter(
+        Goal.id == goal_id,
+        Goal.user_id == current_user.id
+    ).first()
+
+    if not goal:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Goal not found"
+        )
+
+    rubric_text_input = goal_data.rubric_text if goal_data.rubric_text is not None else goal.rubric_text
+    rubric_items = _determine_rubrics(rubric_text_input, goal_data.selected_rubrics)
+    if not rubric_items:
+        rubric_items = _extract_rubrics_from_text(goal.rubric_text)
+    rubric_text = _build_rubric_text(rubric_items, rubric_text_input)
+
+    goal.writing_type_id = goal_data.writing_type_id if goal_data.writing_type_id is not None else goal.writing_type_id
+    goal.writing_type_custom = (
+        goal_data.writing_type_custom if goal_data.writing_type_custom is not None else goal.writing_type_custom
+    )
+    goal.key_constraints = (
+        goal_data.key_constraints if goal_data.key_constraints is not None else goal.key_constraints
+    )
+    goal.rubric_text = rubric_text
+
+    writing_type_name = _resolve_writing_type_name(db, goal.writing_type_id, goal.writing_type_custom)
+    goal.extracted_criteria = _build_extracted_payload(rubric_items, writing_type_name)
+
+    _replace_goal_criteria(db, goal, rubric_items)
+    db.commit()
+    db.refresh(goal)
     return goal
 
 
@@ -155,74 +234,39 @@ async def preview_goal_extraction(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Preview criteria extraction from rubric text WITHOUT saving to database.
-    
-    This allows users to:
-    1. See what criteria will be extracted
-    2. Review weights and mandatory flags
-    3. Adjust rubric text before final creation
-    
-    Supports both free-text rubric input and checkbox selections.
-    Perfect for Task 1: Context Setup - validating Goal Objects
-    """
-    # Convert selected rubrics to rubric text if needed
-    rubric_text = request.rubric_text
-    if not rubric_text and request.selected_rubrics:
-        rubric_text = "\n".join([
-            f"{idx + 1}. {item}"
-            for idx, item in enumerate(request.selected_rubrics)
-        ])
-    
-    if not rubric_text:
+    """Preview criteria based on manual rubric selections only."""
+    rubric_items = _determine_rubrics(request.rubric_text, request.selected_rubrics)
+    if not rubric_items:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Either rubric_text or selected_rubrics must be provided"
         )
-    
-    # Get writing type context
-    writing_type_name = None
-    if request.writing_type_id:
-        writing_type = db.query(WritingType).filter(
-            WritingType.id == request.writing_type_id
-        ).first()
-        if writing_type:
-            writing_type_name = writing_type.display_name
-    elif request.writing_type_custom:
-        writing_type_name = request.writing_type_custom
-    
-    # Extract criteria using LLM
-    llm_result = await llm_service.extract_criteria_from_rubric(
-        rubric_text=rubric_text,
-        writing_type=writing_type_name,
-        key_constraints=request.key_constraints
-    )
-    
-    # Convert to preview format
+
+    writing_type_name = _resolve_writing_type_name(db, request.writing_type_id, request.writing_type_custom)
+
     criteria_previews = [
         CriterionPreview(
-            label=c.get("label", "Unnamed"),
-            description=c.get("description", ""),
-            weight=float(c.get("weight", 1.0)),
-            is_mandatory=bool(c.get("is_mandatory", True)),
-            order_index=int(c.get("order_index", idx))
+            label=item,
+            description=item,
+            weight=1.0,
+            is_mandatory=True,
+            order_index=idx,
         )
-        for idx, c in enumerate(llm_result.get("criteria", []))
+        for idx, item in enumerate(rubric_items)
     ]
-    
-    # Calculate stats
-    mandatory_count = sum(1 for c in criteria_previews if c.is_mandatory)
-    optional_count = len(criteria_previews) - mandatory_count
-    
+
+    mandatory_count = len(criteria_previews)
+    optional_count = 0
+
     return GoalPreviewResponse(
-        main_goal=llm_result.get("main_goal", "Document writing goal"),
+        main_goal=writing_type_name or "Document writing goal",
         criteria=criteria_previews,
-        success_indicators=llm_result.get("success_indicators", []),
+        success_indicators=[],
         writing_type=writing_type_name,
         key_constraints=request.key_constraints,
         total_criteria=len(criteria_previews),
         mandatory_count=mandatory_count,
-        optional_count=optional_count
+        optional_count=optional_count,
     )
 
 
@@ -231,29 +275,15 @@ async def validate_criteria(
     request: GoalValidationRequest,
     current_user: User = Depends(get_current_user)
 ):
-    # Validate with LLM
-    validation_result = await llm_service.validate_criteria_alignment(
-        criteria=request.criteria,
-        writing_type=request.writing_type
-    )
-    
-    # Calculate confidence score based on validation
-    is_valid = validation_result.get("is_valid", True)
-    suggestions_count = len(validation_result.get("suggestions", []))
-    missing_count = len(validation_result.get("missing_elements", []))
-    
-    # Simple confidence calculation
-    # Start with 1.0, reduce based on issues
-    confidence = 1.0
-    if not is_valid:
-        confidence -= 0.3
-    confidence -= min(0.4, suggestions_count * 0.1)  # Max -0.4 for suggestions
-    confidence -= min(0.3, missing_count * 0.05)     # Max -0.3 for missing elements
-    confidence = max(0.0, confidence)  # Ensure >= 0
-    
+    # Simple local validation: ensure each criterion has a label
+    invalid_labels = [c for c in request.criteria if not c.get("label")]
+    suggestions = []
+    if invalid_labels:
+        suggestions.append("Provide a label for every criterion.")
+
     return GoalValidationResponse(
-        is_valid=is_valid,
-        suggestions=validation_result.get("suggestions", []),
-        missing_elements=validation_result.get("missing_elements", []),
-        confidence_score=round(confidence, 2)
+        is_valid=len(invalid_labels) == 0,
+        suggestions=suggestions,
+        missing_elements=[],
+        confidence_score=1.0 if not invalid_labels else 0.6,
     )

@@ -24,6 +24,7 @@ class DocumentResponse(BaseModel):
     content_full: str
     version: int
     word_count: int
+    structure_json: Dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
 

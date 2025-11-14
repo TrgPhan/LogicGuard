@@ -12,6 +12,7 @@ from app.schemas.document import (
     ParagraphResponse, ParagraphUpdate,
     SentenceResponse
 )
+from app.services.document_sync import DocumentCanvasSyncService
 
 router = APIRouter()
 
@@ -38,9 +39,12 @@ def create_document(
         title=document_data.title,
         content_full=document_data.content_full,
         goal_id=document_data.goal_id,
-        word_count=len(document_data.content_full.split()) if document_data.content_full else 0
     )
     db.add(new_document)
+    db.flush()
+
+    DocumentCanvasSyncService(db).sync(new_document, document_data.content_full)
+
     db.commit()
     db.refresh(new_document)
     return new_document
@@ -91,8 +95,8 @@ def update_document(
         document.title = document_data.title
     if document_data.content_full is not None:
         document.content_full = document_data.content_full
-        document.word_count = len(document_data.content_full.split())
         document.version += 1
+        DocumentCanvasSyncService(db).sync(document, document.content_full)
     if document_data.goal_id is not None:
         document.goal_id = document_data.goal_id
     

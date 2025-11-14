@@ -7,7 +7,15 @@ import { Button } from "@/components/ui/button"
 import { Save, Download, ChevronLeft, Loader2, Check } from "lucide-react"
 import { RichTextEditor } from "@/components/rich-text-editor"
 import { ContextSetup } from "@/components/context-setup"
-import { DocumentsAPI } from "@/lib/api-service"
+import { DocumentsAPI, EnhancedGoalsAPI } from "@/lib/api-service"
+import type { GoalDetailResponse } from "@/lib/api-service"
+
+interface ContextDataPayload {
+  writingType: string
+  goalRubrics: string[]
+  keyConstraints: string[]
+  goal: GoalDetailResponse
+}
 
 export default function CanvasPage() {
   const router = useRouter()
@@ -16,6 +24,7 @@ export default function CanvasPage() {
 
   const [editorContent, setEditorContent] = useState("")
   const [currentDoc, setCurrentDoc] = useState<{ title: string; content: string; goalId?: string | null } | null>(null)
+  const [currentGoal, setCurrentGoal] = useState<GoalDetailResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -68,6 +77,7 @@ export default function CanvasPage() {
   const fetchDocument = async (documentId: string) => {
     setIsLoading(true)
     setError(null)
+    setCurrentGoal(null)
     try {
       const doc = await DocumentsAPI.getById(documentId)
       const content = doc.content_full || ""
@@ -79,6 +89,10 @@ export default function CanvasPage() {
       setEditorContent(content)
       initialContentRef.current = content
       setHasUnsavedChanges(false)
+
+      if (doc.goal_id) {
+        await loadGoal(doc.goal_id)
+      }
     } catch (err: any) {
       setError(err.message || "Failed to load document")
       if (selectedDocument) {
@@ -93,6 +107,15 @@ export default function CanvasPage() {
       }
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadGoal = async (goalId: string) => {
+    try {
+      const goalData = await EnhancedGoalsAPI.getById(goalId)
+      setCurrentGoal(goalData)
+    } catch (err: any) {
+      setError(err.message || "Failed to load goal data")
     }
   }
 
@@ -133,15 +156,19 @@ export default function CanvasPage() {
     URL.revokeObjectURL(url)
   }
 
-  const handleContextApply = async (contextData: any) => {
+  const handleContextApply = async (contextData: ContextDataPayload) => {
     if (!docId || !contextData.goal) return
 
     try {
-      await DocumentsAPI.update(docId, {
-        goal_id: contextData.goal.id,
-      })
+      if (!currentDoc?.goalId || currentDoc.goalId !== contextData.goal.id) {
+        await DocumentsAPI.update(docId, {
+          goal_id: contextData.goal.id,
+        })
 
-      setCurrentDoc(prev => prev ? { ...prev, goalId: contextData.goal.id } : null)
+        setCurrentDoc((prev) => (prev ? { ...prev, goalId: contextData.goal.id } : prev))
+      }
+
+      setCurrentGoal(contextData.goal)
     } catch (err: any) {
       setError(err.message || "Failed to link goal to document")
     }
@@ -223,7 +250,7 @@ export default function CanvasPage() {
         </div>
 
         <div className="space-y-4">
-          <ContextSetup onApply={handleContextApply} />
+          <ContextSetup goal={currentGoal} onApply={handleContextApply} />
         </div>
       </div>
     </div>
