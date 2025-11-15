@@ -4,9 +4,11 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useDocument } from "@/lib/document-context"
 import { Button } from "@/components/ui/button"
-import { Save, Download, ChevronLeft, Loader2, Check } from "lucide-react"
-import { RichTextEditor } from "@/components/rich-text-editor"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Save, Download, ChevronLeft, Loader2, Check, Sparkles } from "lucide-react"
+import { RichTextEditor, type AnalysisIssue } from "@/components/rich-text-editor"
 import { ContextSetup } from "@/components/context-setup"
+import { AnalysisIssuesOverlay } from "@/components/analysis-issues-overlay"
 import { DocumentsAPI, EnhancedGoalsAPI } from "@/lib/api-service"
 import type { GoalDetailResponse } from "@/lib/api-service"
 
@@ -30,9 +32,52 @@ export default function CanvasPage() {
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [analysisActive, setAnalysisActive] = useState(false)
+  const [analysisIssues, setAnalysisIssues] = useState<AnalysisIssue[]>([])
+  const [appliedSuggestions, setAppliedSuggestions] = useState<string[]>([])
   const initialContentRef = useRef<string>("")
 
   const docId = searchParams.get("docId") || selectedDocumentId
+
+  // Mock analysis issues - Replace with actual API call
+  const mockAnalysisIssues: AnalysisIssue[] = [
+    {
+      id: "1",
+      type: "logic_contradiction",
+      startPos: 0,
+      endPos: 0,
+      message: "This statement contradicts the previous argument",
+      suggestion: "the system has identified consistent points",
+      text: "identified key points",
+    },
+    {
+      id: "2",
+      type: "weak_evidence",
+      startPos: 0,
+      endPos: 0,
+      message: "This claim needs stronger supporting evidence",
+      suggestion: "climate change presents interconnected challenges that require evidence-based solutions",
+      text: "multifaceted impacts",
+    },
+    {
+      id: "3",
+      type: "clarity_issue",
+      startPos: 0,
+      endPos: 0,
+      message: "This phrase could be more concise and clearer",
+      suggestion: "demonstrates real-world business applications",
+      text: "practical application of theoretical frameworks in a real-world business scenario",
+    },
+    {
+      id: "4",
+      type: "logic_gap",
+      startPos: 0,
+      endPos: 0,
+      message: "Missing connection between premise and conclusion",
+      suggestion: "synthesizes and evaluates recent research findings",
+      text: "synthesizes recent research findings",
+    },
+  ]
 
   useEffect(() => {
     if (docId) {
@@ -174,6 +219,30 @@ export default function CanvasPage() {
     }
   }
 
+  const handleAnalyze = () => {
+    if (!analysisActive) {
+      // Enable analysis mode and show mock issues
+      setAnalysisIssues(mockAnalysisIssues)
+      setAnalysisActive(true)
+    } else {
+      // Disable analysis mode and clear issues
+      setAnalysisIssues([])
+      setAnalysisActive(false)
+      setAppliedSuggestions([])
+    }
+  }
+
+  const handleSuggestionClick = (issue: AnalysisIssue) => {
+    // Remove the issue from the list when clicked
+    setAnalysisIssues(analysisIssues.filter(i => i.id !== issue.id))
+    setAppliedSuggestions([...appliedSuggestions, issue.id])
+  }
+
+  const handleSuggestionAccept = (issueId: string) => {
+    // Called after suggestion is applied in editor
+    console.log("[Canvas] Suggestion accepted:", issueId)
+  }
+
   if (!docId) {
     return (
       <div className="p-8 space-y-6 text-center">
@@ -232,6 +301,13 @@ export default function CanvasPage() {
             {isSaving ? "Saving..." : saveSuccess ? "Saved!" : "Save Draft"}
           </Button>
           <Button
+            onClick={handleAnalyze}
+            className={`gap-2 ${analysisActive ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#37322F] hover:bg-[#37322F]/90'}`}
+          >
+            <Sparkles className="h-4 w-4" />
+            {analysisActive ? 'Analysis Active' : 'Analyze'}
+          </Button>
+          <Button
             className="gap-2 bg-[#37322F] hover:bg-[#37322F]/90"
             onClick={handleExport}
           >
@@ -246,11 +322,49 @@ export default function CanvasPage() {
           <RichTextEditor
             onContentChange={setEditorContent}
             initialContent={currentDoc?.content || ""}
+            analysisActive={analysisActive}
+            analysisIssues={analysisIssues}
+            onSuggestionAccept={handleSuggestionAccept}
           />
         </div>
 
         <div className="space-y-4">
-          <ContextSetup goal={currentGoal} onApply={handleContextApply} />
+          {analysisActive && analysisIssues.length > 0 ? (
+            <AnalysisIssuesOverlay
+              issues={analysisIssues}
+              onSuggestionClick={handleSuggestionClick}
+            />
+          ) : (
+            <>
+              <Card className="border-[rgba(55,50,47,0.12)]">
+                <CardHeader>
+                  <CardTitle className="text-base">Writing Type</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="text-sm space-y-2">
+                    <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
+                      <input type="radio" id="essay" name="writing-type" defaultChecked className="h-4 w-4" />
+                      <label htmlFor="essay" className="text-[#37322F] cursor-pointer">Essay</label>
+                    </div>
+                    <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
+                      <input type="radio" id="research" name="writing-type" className="h-4 w-4" />
+                      <label htmlFor="research" className="text-[#37322F] cursor-pointer">Research Paper</label>
+                    </div>
+                    <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
+                      <input type="radio" id="proposal" name="writing-type" className="h-4 w-4" />
+                      <label htmlFor="proposal" className="text-[#37322F] cursor-pointer">Business Proposal</label>
+                    </div>
+                    <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
+                      <input type="radio" id="review" name="writing-type" className="h-4 w-4" />
+                      <label htmlFor="review" className="text-[#37322F] cursor-pointer">Literature Review</label>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <ContextSetup goal={currentGoal} onApply={handleContextApply} />
+            </>
+          )}
         </div>
       </div>
     </div>
