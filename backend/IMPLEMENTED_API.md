@@ -33,6 +33,12 @@ This document specifies the input and output for completed API reference for Log
 - PUT `/api/documents/paragraphs/{id}`
 - GET `/api/documents/paragraphs/{id}/sentences`
 
+**Logic Quality Checks:**
+
+- POST `/api/logic-checks/unsupported-claims`
+- POST `/api/logic-checks/undefined-terms`
+- POST `/api/logic-checks/contradictions`
+
 🔄 **Placeholder (Coming Soon):**
 
 - Analysis endpoints
@@ -397,6 +403,100 @@ curl -X POST "http://127.0.0.1:8000/api/goals/" \
     "key_constraints": "Must be 5-7 pages, APA format, minimum 5 scholarly sources"
   }'
 ```
+
+---
+
+## 3. Logic Quality Checks
+
+These endpoints expose the AI micro-services now powering the unsupported-claim, undefined-term, and contradiction checks that the frontend canvas needs.
+
+### 3.1 Unsupported Claims
+
+**POST** `/api/logic-checks/unsupported-claims`
+
+**Input:**
+
+```json
+{
+	"context": {
+		"writing_type": "Technical Proposal",
+		"main_goal": "Chứng minh NoSQL có khả năng mở rộng tốt hơn",
+		"criteria": ["nhắc đến scalability", "có luận cứ kỹ thuật"],
+		"constraints": ["word_limit: 1000"]
+	},
+	"content": "Nội dung bài viết"
+}
+```
+
+**Output (truncated):**
+
+```json
+{
+	"success": true,
+	"total_claims_found": 4,
+	"total_unsupported": 2,
+	"unsupported_claims": [
+		{
+			"claim": "AI can perfectly predict human emotions.",
+			"status": "unsupported",
+			"suggestion": "Add source, data, or example to support this claim."
+		}
+	],
+	"supported_claims": [],
+	"metadata": {
+		"model": "gemini-2.5-flash"
+	}
+}
+```
+
+### 3.2 Undefined Terms
+
+**POST** `/api/logic-checks/undefined-terms`
+
+Request body matches the unsupported-claims endpoint (`context` + `content`). The response contains `total_terms_found`, `total_undefined`, along with `undefined_terms`/`defined_terms` arrays describing each detected entity and whether a definition exists around its first mention.
+
+### 3.3 Contradictions
+
+**POST** `/api/logic-checks/contradictions`
+
+**Input (defaults shown):**
+
+```json
+{
+	"text": "Sentence A. Sentence B.",
+	"mode": "finetuned",
+	"threshold": 0.75,
+	"use_embeddings_filter": true,
+	"embedding_model_name": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+	"top_k": 50,
+	"sim_min": 0.3,
+	"sim_max": 0.98,
+	"batch_size": 8,
+	"max_length": 128
+}
+```
+
+**Output (abridged):**
+
+```json
+{
+	"success": true,
+	"mode": "finetuned",
+	"total_sentences": 5,
+	"total_contradictions": 1,
+	"contradictions": [
+		{
+			"id": 1,
+			"sentence1": "Q1 revenue dropped 20%",
+			"sentence2": "Revenue has grown every quarter",
+			"confidence": 0.82,
+			"boosted": true
+		}
+	]
+}
+```
+
+Every endpoint requires authentication (Bearer token). The backend returns `success: false` plus `metadata.error` if the underlying model fails so the frontend can display actionable messaging.
 
 ---
 
