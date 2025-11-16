@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+
+from app.core.database import Base, engine
 from app.core.config import get_settings
 from app.routers import (
     analysis,
@@ -15,14 +18,24 @@ from app.routers import (
 
 settings = get_settings()
 
-# Create FastAPI app
+# 🚀 Lifespan event handler (thay cho on_event startup)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("📌 Creating tables on startup...")
+    Base.metadata.create_all(bind=engine)
+    yield
+    print("🧹 Shutdown complete.")
+
+
+# FastAPI app
 app = FastAPI(
     title="LogicGuard API",
     description="AI-powered writing analysis and feedback system",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
-# Configure CORS
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.FRONTEND_URL, "http://localhost:3000"],
@@ -31,7 +44,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+# Routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
@@ -45,7 +58,6 @@ app.include_router(logic_checks.router, prefix="/api", tags=["Logic Checks"])
 
 @app.get("/")
 def read_root():
-    """Root endpoint"""
     return {
         "message": "LogicGuard API is running",
         "version": "1.0.0",
@@ -55,10 +67,10 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    """Health check endpoint"""
     return {"status": "healthy"}
 
 
+# Optional: local dev mode
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

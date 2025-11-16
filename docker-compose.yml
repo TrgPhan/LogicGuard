@@ -29,7 +29,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/logicguard
+      DATABASE_URL: postgresql://app:app@db:5432/logicguard
       FRONTEND_URL: http://localhost:3000
     ports:
       - "8000:8000"
