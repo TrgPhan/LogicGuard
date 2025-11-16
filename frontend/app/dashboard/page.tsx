@@ -1,30 +1,88 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { PenTool, MessageSquare, Target, FileText, TrendingUp, CheckCircle2 } from "lucide-react"
+import { PenTool, MessageSquare, Target, FileText, TrendingUp, CheckCircle2, Loader2 } from "lucide-react"
 import { useDocument } from "@/lib/document-context"
-
-const MOCK_DOCUMENTS = [
-  { id: "1", title: "Research Paper Draft", date: "2 hours ago", score: 92, words: 2450 },
-  { id: "2", title: "Essay on Climate Change", date: "Yesterday", score: 85, words: 1820 },
-  { id: "3", title: "Business Proposal", date: "3 days ago", score: 78, words: 3200 },
-]
+import { DocumentsAPI, AuthAPI } from "@/lib/api-service"
+import { formatDistanceToNow } from "date-fns"
 
 export default function DashboardPage() {
   const router = useRouter()
   const { setSelectedDocumentId } = useDocument()
+  const [recentDocs, setRecentDocs] = useState<any[]>([])
+  const [stats, setStats] = useState({
+    totalDocs: 0,
+    totalWords: 0,
+    avgScore: 0,
+    issuesFound: 0,
+  })
+  const [isLoading, setIsLoading] = useState(true)
+  const [userName, setUserName] = useState("User")
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [])
+
+  const fetchDashboardData = async () => {
+    setIsLoading(true)
+    try {
+      // Fetch user profile
+      const profile = await AuthAPI.getProfile()
+      setUserName(profile.email.split('@')[0])
+
+      // Fetch documents
+      const docs = await DocumentsAPI.getAll()
+
+      // Calculate stats
+      const totalWords = docs.reduce((sum, doc) => sum + (doc.word_count || 0), 0)
+
+      // Get recent 3 documents
+      const sortedDocs = docs
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .slice(0, 3)
+        .map(doc => ({
+          id: doc.id,
+          title: doc.title,
+          date: formatDistanceToNow(new Date(doc.updated_at), { addSuffix: true }),
+          words: doc.word_count,
+        }))
+
+      setRecentDocs(sortedDocs)
+      setStats({
+        totalDocs: docs.length,
+        totalWords,
+        avgScore: 0, // Will be available when Analysis API is ready
+        issuesFound: 0, // Will be available when Feedback API is ready
+      })
+    } catch (error) {
+      // Silent fail - show empty dashboard
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleRecentDocumentClick = (docId: string) => {
     setSelectedDocumentId(docId)
-    router.push("/dashboard/canvas")
+    const params = new URLSearchParams()
+    params.set("docId", docId)
+    router.push(`/dashboard/canvas?${params.toString()}`)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-8 flex justify-center items-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#37322F]" />
+      </div>
+    )
   }
 
   return (
     <div className="p-8 space-y-8">
       {/* Welcome Section */}
       <div>
-        <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Welcome back!</h1>
+        <h1 className="text-3xl font-semibold text-[#37322F] mb-2">Welcome back, {userName}!</h1>
         <p className="text-[#605A57]">Here's an overview of your writing progress and tools.</p>
       </div>
 
@@ -36,30 +94,30 @@ export default function DashboardPage() {
             <FileText className="h-4 w-4 text-[#605A57]" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-[#37322F]">12</div>
-            <p className="text-xs text-[#605A57] mt-1">+2 from last week</p>
+            <div className="text-2xl font-bold text-[#37322F]">{stats.totalDocs}</div>
+            <p className="text-xs text-[#605A57] mt-1">All your documents</p>
           </CardContent>
         </Card>
 
         <Card className="border-[rgba(55,50,47,0.12)]">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-[#605A57]">Logic Score</CardTitle>
+            <CardTitle className="text-sm font-medium text-[#605A57]">Total Words</CardTitle>
             <TrendingUp className="h-4 w-4 text-[#605A57]" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-[#37322F]">87%</div>
-            <p className="text-xs text-[#605A57] mt-1">+5% improvement</p>
+            <div className="text-2xl font-bold text-[#37322F]">{stats.totalWords.toLocaleString()}</div>
+            <p className="text-xs text-[#605A57] mt-1">Across all documents</p>
           </CardContent>
         </Card>
 
         <Card className="border-[rgba(55,50,47,0.12)]">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-[#605A57]">Issues Resolved</CardTitle>
+            <CardTitle className="text-sm font-medium text-[#605A57]">Issues Found</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-[#605A57]" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-[#37322F]">34</div>
-            <p className="text-xs text-[#605A57] mt-1">This month</p>
+            <div className="text-2xl font-bold text-[#37322F]">{stats.issuesFound}</div>
+            <p className="text-xs text-[#605A57] mt-1">Awaiting Analysis API</p>
           </CardContent>
         </Card>
 
@@ -128,29 +186,34 @@ export default function DashboardPage() {
         <h2 className="text-xl font-semibold text-[#37322F] mb-4">Recent Documents</h2>
         <Card className="border-[rgba(55,50,47,0.12)]">
           <CardContent className="p-0">
-            <div className="divide-y divide-[rgba(55,50,47,0.12)]">
-              {MOCK_DOCUMENTS.map((doc) => (
-                <div
-                  key={doc.id}
-                  onClick={() => handleRecentDocumentClick(doc.id)}
-                  className="p-4 hover:bg-[#F7F5F3] cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-[#605A57]" />
-                      <div>
-                        <p className="font-medium text-[#37322F]">{doc.title}</p>
-                        <p className="text-sm text-[#605A57]">{doc.date}</p>
+            {recentDocs.length === 0 ? (
+              <div className="p-8 text-center text-[#605A57]">
+                No documents yet. Create your first one!
+              </div>
+            ) : (
+              <div className="divide-y divide-[rgba(55,50,47,0.12)]">
+                {recentDocs.map((doc) => (
+                  <div
+                    key={doc.id}
+                    onClick={() => handleRecentDocumentClick(doc.id)}
+                    className="p-4 hover:bg-[#F7F5F3] cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-[#605A57]" />
+                        <div>
+                          <p className="font-medium text-[#37322F]">{doc.title}</p>
+                          <p className="text-sm text-[#605A57]">{doc.date}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-[#605A57]">{doc.words} words</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-[#605A57]">Logic Score</p>
-                      <p className="text-lg font-semibold text-[#37322F]">{doc.score}%</p>
-                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -62,7 +62,7 @@ export default function GoalsPage() {
     try {
       setGoalsData(mockGoalsData[documentId] || mockGoalsData["1"])
     } catch (error) {
-      console.error("Failed to fetch goals:", error)
+      // Silent fail
     } finally {
       setIsLoading(false)
     }

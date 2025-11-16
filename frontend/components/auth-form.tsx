@@ -76,13 +76,13 @@ export function AuthForm({ mode }: AuthFormProps) {
           email: formData.email,
           password: formData.password,
         })
-        
+
         setMessage({ type: "success", text: "Login successful!" })
-        
+
         // Check if there's a redirect path from sessionStorage
         const redirectTo = sessionStorage.getItem('redirectAfterLogin') || '/dashboard'
         sessionStorage.removeItem('redirectAfterLogin')
-        
+
         setTimeout(() => {
           router.push(redirectTo)
         }, 500)
@@ -90,9 +90,8 @@ export function AuthForm({ mode }: AuthFormProps) {
         await AuthAPI.register({
           email: formData.email,
           password: formData.password,
-          full_name: formData.name,
         })
-        
+
         setMessage({ type: "success", text: "Registration successful! Redirecting..." })
         setTimeout(() => {
           router.push('/dashboard')
@@ -171,11 +170,10 @@ export function AuthForm({ mode }: AuthFormProps) {
 
           {message && (
             <div
-              className={`p-3 rounded-md text-sm ${
-                message.type === "error"
+              className={`p-3 rounded-md text-sm ${message.type === "error"
                   ? "bg-red-50 text-red-700 border border-red-200"
                   : "bg-green-50 text-green-700 border border-green-200"
-              }`}
+                }`}
             >
               {message.text}
             </div>

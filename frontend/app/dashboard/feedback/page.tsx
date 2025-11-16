@@ -72,7 +72,7 @@ export default function FeedbackPage() {
     try {
       setFeedbackItems(mockFeedbackData[documentId] || mockFeedbackData["1"])
     } catch (error) {
-      console.error("Failed to fetch feedback:", error)
+      // Silent fail
     } finally {
       setIsLoading(false)
     }

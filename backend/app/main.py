@@ -1,7 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
-from app.routers import auth, documents, goals, feedback, analysis, writing_types, predefined_options, users
+from app.routers import (
+    analysis,
+    auth,
+    documents,
+    feedback,
+    goals,
+    logic_checks,
+    predefined_options,
+    users,
+    writing_types,
+)
 
 settings = get_settings()
 
@@ -30,6 +40,7 @@ app.include_router(writing_types.router, prefix="/api/writing-types", tags=["Wri
 app.include_router(predefined_options.router, prefix="/api/predefined-options", tags=["Predefined Options"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["Analysis"])
 app.include_router(feedback.router, prefix="/api/feedback", tags=["Feedback"])
+app.include_router(logic_checks.router, prefix="/api", tags=["Logic Checks"])
 
 
 @app.get("/")

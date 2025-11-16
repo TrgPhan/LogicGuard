@@ -25,7 +25,6 @@ if result['success']:
         print(f"  Confidence: {c['confidence']:.2%}\n")
 ```
 
-
 ### 2️⃣ **Tối ưu - Multiple Texts**
 
 ```python
@@ -47,10 +46,11 @@ clear_model_cache()
 ```
 
 **Performance:**
+
 - Text 1: ~10s (load models)
 - Text 2: ~2s (cached)
 - Text 3: ~2s (cached)
-- **Speedup: 5x faster!** 
+- **Speedup: 5x faster!**
 
 ---
 
@@ -74,6 +74,7 @@ async def analyze_text(text: str, mode: str = "finetuned"):
 ```
 
 **Lợi ích:**
+
 - Request đầu: ~10s (load models 1 lần)
 - Các request sau: ~1-3s (dùng cache)
 - Không cần restart server
@@ -111,6 +112,7 @@ clear_model_cache()
 ```
 
 **Khi nào cần clear?**
+
 - ✅ Khi đổi mode (base ↔ finetuned) nhiều lần
 - ✅ Khi hết dùng và muốn giải phóng RAM/GPU
 - ✅ Khi chạy batch job xong
@@ -119,6 +121,7 @@ clear_model_cache()
 ### Auto memory management
 
 Code tự động kiểm tra và clear cache khi:
+
 - GPU memory usage > 80%
 - Tránh OOM (Out of Memory)
 
@@ -193,17 +196,18 @@ result = check_contradictions(text)  # ✅ Nhanh (cached)
 
 ## 🎯 Performance Comparison
 
-| Scenario | Before (No Cache) | After (With Cache) | Speedup |
-|----------|-------------------|-------------------|---------|
-| Single text | ~10-15s | ~10-15s | 1x |
-| 10 texts | ~100-150s | ~25-35s | **4-5x** ⚡ |
-| API (100 req) | ~1000-1500s | ~150-250s | **5-7x** 🚀 |
+| Scenario      | Before (No Cache) | After (With Cache) | Speedup     |
+| ------------- | ----------------- | ------------------ | ----------- |
+| Single text   | ~10-15s           | ~10-15s            | 1x          |
+| 10 texts      | ~100-150s         | ~25-35s            | **4-5x** ⚡ |
+| API (100 req) | ~1000-1500s       | ~150-250s          | **5-7x** 🚀 |
 
 ---
 
 ## 🐛 Troubleshooting
 
 ### Model không load?
+
 ```python
 # Check Hugging Face connection
 from transformers import AutoModel
@@ -211,6 +215,7 @@ model = AutoModel.from_pretrained("duowng/mDeBERTa-v3-base-xnli-multilingual-nli
 ```
 
 ### Out of Memory?
+
 ```python
 # Clear cache thủ công
 from app.ai.models.contradictions import clear_model_cache
@@ -218,6 +223,7 @@ clear_model_cache()
 ```
 
 ### Code chạy chậm?
+
 - Lần đầu: Bình thường (~10-15s load models)
 - Lần sau vẫn chậm: Check xem có clear cache giữa chừng không?
 

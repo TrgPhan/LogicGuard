@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { PenTool, MessageSquare, Target, Settings, FileText, LayoutGrid } from "lucide-react"
+import { PenTool, Target, Settings, FileText, LayoutGrid } from "lucide-react"
 import { useDocument } from "@/lib/document-context"
 
 const navigation = [
@@ -24,12 +24,6 @@ const subStacks = [
     name: "Writing Canvas",
     href: "/dashboard/canvas",
     icon: PenTool,
-    requiresDocument: true,
-  },
-  {
-    name: "Feedback",
-    href: "/dashboard/feedback",
-    icon: MessageSquare,
     requiresDocument: true,
   },
   {
