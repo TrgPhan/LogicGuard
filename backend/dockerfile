@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+# Cài tools cần thiết để build một số gói Python nếu cần
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Thư mục làm việc trong container
+WORKDIR /app
+
+# Copy file requirements trước (tận dụng cache Docker)
+COPY requirements.txt .
+
+# Cài dependencies
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+# Copy toàn bộ source backend vào container
+COPY . .
+
+# Expose port backend
+EXPOSE 8000
+
+# Lệnh chạy backend (giống bạn chạy local)
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
