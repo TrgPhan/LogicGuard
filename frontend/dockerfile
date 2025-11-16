@@ -1,0 +1,33 @@
+# Stage 1: build Next.js
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy file dependency
+COPY package*.json ./
+
+# Cài dependencies
+RUN npm install
+
+# Copy toàn bộ source FE vào container
+COPY . .
+
+# Build Next app (production build)
+RUN npm run build
+
+# Stage 2: runtime
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Copy kết quả build từ stage builder
+COPY --from=builder /app ./
+
+# Expose port Next
+EXPOSE 3000
+
+# Chạy Next ở production mode
+CMD ["npm", "start"]
