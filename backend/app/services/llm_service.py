@@ -1,20 +1,62 @@
-import google.generativeai as genai
 import json
 from typing import List, Dict, Any, Optional
-from app.core.config import get_settings
 
-settings = get_settings()
+from app.services.ai_analysis_service import ai_analysis_service
 
-# Configure Gemini
-genai.configure(api_key=settings.GEMINI_API_KEY)
+
+# JSON schema cho task extract_criteria_from_rubric
+RUBRIC_CRITERIA_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "main_goal": {"type": "string"},
+        "criteria": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string"},
+                    "description": {"type": "string"},
+                    "weight": {"type": "number"},
+                    "is_mandatory": {"type": "boolean"},
+                    "order_index": {"type": "integer"},
+                },
+                "required": ["label", "description"],
+            },
+        },
+        "success_indicators": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["criteria"],
+}
+
+# JSON schema cho task validate_criteria_alignment
+CRITERIA_VALIDATION_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "is_valid": {"type": "boolean"},
+        "suggestions": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "missing_elements": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["is_valid", "suggestions", "missing_elements"],
+}
 
 
 class LLMService:
-    """Service for LLM operations using Google Gemini"""
-    
-    def __init__(self):
-        self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
-    
+    """Service cho các thao tác LLM (Gemini) dùng cho rubric, criteria, ..."""
+
+    def __init__(self) -> None:
+        # Không cần tự configure Gemini ở đây nữa,
+        # đã dùng chung qua ai_analysis_service.
+        pass
+
     async def extract_criteria_from_rubric(
         self,
         rubric_text: str,
@@ -23,12 +65,12 @@ class LLMService:
     ) -> Dict[str, Any]:
         """
         Extract structured criteria from rubric text using LLM
-        
+
         Args:
             rubric_text: The rubric text to analyze
             writing_type: Optional writing type context (essay, proposal, etc.)
             key_constraints: Optional constraints (word limit, etc.)
-            
+
         Returns:
             {
                 "criteria": [
@@ -44,7 +86,7 @@ class LLMService:
                 "success_indicators": [str]
             }
         """
-        
+
         # Build context-aware prompt
         context_lines: List[str] = []
         if writing_type:
@@ -137,36 +179,30 @@ Return ONLY valid JSON matching the example schema. Do not include commentary, m
 """
 
         try:
-            # Generate response
-            response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
-            
-            # Clean up response (remove markdown code blocks if present)
-            if response_text.startswith("```json"):
-                response_text = response_text[7:]  # Remove ```json
-            if response_text.startswith("```"):
-                response_text = response_text[3:]  # Remove ```
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]  # Remove trailing ```
-            response_text = response_text.strip()
-            
-            # Parse JSON
-            result = json.loads(response_text)
-            
+            # Gọi Gemini qua AIAnalysisService với schema riêng cho rubric
+            llm_result = ai_analysis_service.generate_json(
+                prompt,
+                RUBRIC_CRITERIA_SCHEMA,
+            )
+
             # Validate structure
-            if "criteria" not in result or not isinstance(result["criteria"], list):
-                raise ValueError("Invalid response structure: missing or invalid 'criteria'")
-            
-            if "main_goal" not in result:
-                result["main_goal"] = "Document writing goal"
-            
-            if "success_indicators" not in result:
-                result["success_indicators"] = []
-            
-            return result
-            
-        except json.JSONDecodeError as e:
-            # Fallback: return basic structure
+            if "criteria" not in llm_result or not isinstance(
+                llm_result["criteria"], list
+            ):
+                raise ValueError(
+                    "Invalid response structure: missing or invalid 'criteria'"
+                )
+
+            if "main_goal" not in llm_result:
+                llm_result["main_goal"] = "Document writing goal"
+
+            if "success_indicators" not in llm_result:
+                llm_result["success_indicators"] = []
+
+            return llm_result
+
+        except ValueError as e:
+            # Fallback: return basic structure (giữ đúng behaviour cũ)
             return {
                 "main_goal": "Parse rubric and meet criteria",
                 "criteria": [
@@ -175,15 +211,15 @@ Return ONLY valid JSON matching the example schema. Do not include commentary, m
                         "description": rubric_text[:200],
                         "weight": 1.0,
                         "is_mandatory": True,
-                        "order_index": 0
+                        "order_index": 0,
                     }
                 ],
                 "success_indicators": [],
-                "error": f"Failed to parse LLM response: {str(e)}"
+                "error": f"Failed to parse LLM response: {str(e)}",
             }
         except Exception as e:
             raise ValueError(f"LLM extraction failed: {str(e)}")
-    
+
     async def validate_criteria_alignment(
         self,
         criteria: List[Dict[str, Any]],
@@ -191,11 +227,11 @@ Return ONLY valid JSON matching the example schema. Do not include commentary, m
     ) -> Dict[str, Any]:
         """
         Validate if extracted criteria align with writing type expectations
-        
+
         Args:
             criteria: List of extracted criteria
             writing_type: The writing type (essay, proposal, etc.)
-            
+
         Returns:
             {
                 "is_valid": bool,
@@ -203,7 +239,7 @@ Return ONLY valid JSON matching the example schema. Do not include commentary, m
                 "missing_elements": [str]
             }
         """
-        
+
         criteria_text = "\n".join(
             [f"- {c['label']}: {c.get('description', '')}" for c in criteria]
         )
@@ -239,27 +275,19 @@ Guidance:
 """
 
         try:
-            response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
-            
-            # Clean markdown
-            if response_text.startswith("```json"):
-                response_text = response_text[7:]
-            if response_text.startswith("```"):
-                response_text = response_text[3:]
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
-            response_text = response_text.strip()
-            
-            result = json.loads(response_text)
-            return result
-            
+            llm_result = ai_analysis_service.generate_json(
+                prompt,
+                CRITERIA_VALIDATION_SCHEMA,
+            )
+            return llm_result
+
         except Exception as e:
+            # Giữ behaviour cũ: nếu lỗi thì coi như valid, không chặn flow
             return {
                 "is_valid": True,
                 "suggestions": [],
                 "missing_elements": [],
-                "error": str(e)
+                "error": str(e),
             }
 
 

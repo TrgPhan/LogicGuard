@@ -14,9 +14,19 @@ class ContextPayload(BaseModel):
 class UnsupportedClaimsRequest(ContextPayload):
     """Request body for unsupported claim analysis."""
 
+    mode: Optional[str] = Field(
+        default="fast",
+        description='Analysis mode: "fast" (default) or "deep".',
+    )
+
 
 class UndefinedTermsRequest(ContextPayload):
-    """Request body for undefined terms analysis."""
+    """Request body for unified logic analysis (undefined terms + others)."""
+
+    mode: Optional[str] = Field(
+        default="fast",
+        description='Analysis mode: "fast" (default) or "deep".',
+    )
 
 
 class Metadata(BaseModel):
