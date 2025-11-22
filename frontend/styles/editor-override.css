@@ -173,24 +173,80 @@
 }
 
 /* Highlight for applied suggestions - green background */
-.ProseMirror .suggestion-applied {
+/* Global styles for suggestion highlights */
+.suggestion-applied,
+span.suggestion-applied,
+mark.suggestion-applied,
+[class*="suggestion-applied"] {
   background-color: #d1fae5 !important; /* green-100 */
   color: #065f46 !important; /* green-800 */
-  font-weight: 500;
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
+  font-weight: 500 !important;
+  padding: 0.125rem 0.25rem !important;
+  border-radius: 0.25rem !important;
   transition: background-color 0.2s ease;
+  display: inline !important;
 }
 
-.ProseMirror .suggestion-applied:hover {
+.suggestion-applied:hover,
+span.suggestion-applied:hover,
+[class*="suggestion-applied"]:hover {
+  background-color: #a7f3d0 !important; /* green-200 */
+}
+
+/* ProseMirror specific */
+.ProseMirror .suggestion-applied,
+.ProseMirror span.suggestion-applied,
+.ProseMirror mark.suggestion-applied,
+.ProseMirror [class*="suggestion-applied"] {
+  background-color: #d1fae5 !important; /* green-100 */
+  color: #065f46 !important; /* green-800 */
+  font-weight: 500 !important;
+  padding: 0.125rem 0.25rem !important;
+  border-radius: 0.25rem !important;
+  transition: background-color 0.2s ease;
+  display: inline !important;
+}
+
+.ProseMirror .suggestion-applied:hover,
+.ProseMirror span.suggestion-applied:hover,
+.ProseMirror [class*="suggestion-applied"]:hover {
   background-color: #a7f3d0 !important; /* green-200 */
 }
 
 /* Temporary highlight during animation */
-.ProseMirror .suggestion-applying {
+.suggestion-applying,
+span.suggestion-applying,
+mark.suggestion-applying,
+[class*="suggestion-applying"] {
   background-color: #bbf7d0 !important; /* green-200 */
   color: #065f46 !important; /* green-800 */
-  font-weight: 600;
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
+  font-weight: 600 !important;
+  padding: 0.125rem 0.25rem !important;
+  border-radius: 0.25rem !important;
+  display: inline !important;
+}
+
+.ProseMirror .suggestion-applying,
+.ProseMirror span.suggestion-applying,
+.ProseMirror mark.suggestion-applying,
+.ProseMirror [class*="suggestion-applying"] {
+  background-color: #bbf7d0 !important; /* green-200 */
+  color: #065f46 !important; /* green-800 */
+  font-weight: 600 !important;
+  padding: 0.125rem 0.25rem !important;
+  border-radius: 0.25rem !important;
+  display: inline !important;
+}
+
+/* Ensure highlights are visible in all contexts */
+.prose-editor .suggestion-applied,
+.prose-editor span.suggestion-applied,
+.prose .suggestion-applied,
+.prose span.suggestion-applied {
+  background-color: #d1fae5 !important;
+  color: #065f46 !important;
+  font-weight: 500 !important;
+  padding: 0.125rem 0.25rem !important;
+  border-radius: 0.25rem !important;
+  display: inline !important;
 }

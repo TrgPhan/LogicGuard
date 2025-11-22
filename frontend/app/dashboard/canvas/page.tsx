@@ -167,24 +167,24 @@ export default function CanvasPage() {
 
   // Function to strip suggestion highlight HTML tags before saving
   const stripSuggestionHighlights = (html: string): string => {
-    // Remove suggestion-applied spans but keep the text content
-    // Handle both single and double quotes in class attribute
+    // Remove suggestion-applied marks/spans but keep the text content
+    // Handle both single and double quotes in class attribute, and both span and mark tags
     let cleaned = html.replace(
-      /<span[^>]*class="[^"]*suggestion-applied[^"]*"[^>]*>(.*?)<\/span>/gi,
-      '$1'
+      /<(span|mark)[^>]*class="[^"]*suggestion-applied[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+      '$2'
     )
     cleaned = cleaned.replace(
-      /<span[^>]*class='[^']*suggestion-applied[^']*'[^>]*>(.*?)<\/span>/gi,
-      '$1'
+      /<(span|mark)[^>]*class='[^']*suggestion-applied[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+      '$2'
     )
-    // Also remove suggestion-applying spans
+    // Also remove suggestion-applying marks/spans
     cleaned = cleaned.replace(
-      /<span[^>]*class="[^"]*suggestion-applying[^"]*"[^>]*>(.*?)<\/span>/gi,
-      '$1'
+      /<(span|mark)[^>]*class="[^"]*suggestion-applying[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+      '$2'
     )
     cleaned = cleaned.replace(
-      /<span[^>]*class='[^']*suggestion-applying[^']*'[^>]*>(.*?)<\/span>/gi,
-      '$1'
+      /<(span|mark)[^>]*class='[^']*suggestion-applying[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+      '$2'
     )
     return cleaned
   }

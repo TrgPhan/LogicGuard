@@ -46,6 +46,40 @@ const FontSize = Extension.create({
     ]
   },
 })
+
+// Custom extension to preserve suggestion highlight spans
+const SuggestionHighlight = Extension.create({
+  name: "suggestionHighlight",
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["textStyle"],
+        attributes: {
+          suggestionHighlight: {
+            default: null,
+            parseHTML: (element) => {
+              // Check if element has suggestion-applied or suggestion-applying class
+              if (element.classList.contains('suggestion-applied') || element.classList.contains('suggestion-applying')) {
+                return element.getAttribute('class') || null
+              }
+              return null
+            },
+            renderHTML: (attributes) => {
+              if (!attributes.suggestionHighlight) {
+                return {}
+              }
+              // Preserve the original HTML structure
+              return {
+                class: attributes.suggestionHighlight,
+              }
+            },
+          },
+        },
+      },
+    ]
+  },
+})
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -147,7 +181,10 @@ export function RichTextEditor({
       attributes: {
         class: 'prose-editor',
         'data-placeholder': 'Start typing your content here...'
-      }
+      },
+      transformPastedHTML(html) {
+        return html
+      },
     }
   })
 
@@ -168,24 +205,24 @@ export function RichTextEditor({
     if (!analysisActive) {
       // Remove all suggestion-applied highlights when analysis is turned off
       const currentContent = editor.getHTML()
-      // Remove suggestion-applied spans but keep the text content
-      // Handle both single and double quotes in class attribute
+      // Remove suggestion-applied marks/spans but keep the text content
+      // Handle both single and double quotes in class attribute, and both span and mark tags
       let cleanedContent = currentContent.replace(
-        /<span[^>]*class="[^"]*suggestion-applied[^"]*"[^>]*>(.*?)<\/span>/gi,
-        '$1'
+        /<(span|mark)[^>]*class="[^"]*suggestion-applied[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+        '$2'
       )
       cleanedContent = cleanedContent.replace(
-        /<span[^>]*class='[^']*suggestion-applied[^']*'[^>]*>(.*?)<\/span>/gi,
-        '$1'
+        /<(span|mark)[^>]*class='[^']*suggestion-applied[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+        '$2'
       )
-      // Also remove suggestion-applying spans
+      // Also remove suggestion-applying marks/spans
       cleanedContent = cleanedContent.replace(
-        /<span[^>]*class="[^"]*suggestion-applying[^"]*"[^>]*>(.*?)<\/span>/gi,
-        '$1'
+        /<(span|mark)[^>]*class="[^"]*suggestion-applying[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+        '$2'
       )
       cleanedContent = cleanedContent.replace(
-        /<span[^>]*class='[^']*suggestion-applying[^']*'[^>]*>(.*?)<\/span>/gi,
-        '$1'
+        /<(span|mark)[^>]*class='[^']*suggestion-applying[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+        '$2'
       )
       
       if (cleanedContent !== currentContent) {
@@ -283,14 +320,14 @@ export function RichTextEditor({
       /<span[^>]*class="[^"]*issue-highlight[^"]*"[^>]*>(.*?)<\/span>/gi,
       '$1'
     )
-    // Remove any existing green highlights
+    // Remove any existing green highlights (both span and mark tags)
     contentToSearch = contentToSearch.replace(
-      /<span[^>]*class="[^"]*suggestion-applied[^"]*"[^>]*>(.*?)<\/span>/gi,
-      '$1'
+      /<(span|mark)[^>]*class="[^"]*suggestion-applied[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+      '$2'
     )
     contentToSearch = contentToSearch.replace(
-      /<span[^>]*class='[^']*suggestion-applied[^']*'[^>]*>(.*?)<\/span>/gi,
-      '$1'
+      /<(span|mark)[^>]*class='[^']*suggestion-applied[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+      '$2'
     )
     
     // Check if text exists in content
@@ -315,7 +352,7 @@ export function RichTextEditor({
           // First, show animated highlight - replace original text with suggestion
           const animatedContent = contentToSearch.replace(
             new RegExp(escapedMatchedText, 'g'),
-            `<span class="suggestion-applying bg-green-200 text-green-800 font-semibold animate-pulse px-1 rounded">${issue.suggestion}</span>`
+            `<span class="suggestion-applying" style="background-color: #bbf7d0; color: #065f46; font-weight: 600; padding: 0.125rem 0.25rem; border-radius: 0.25rem; display: inline;">${issue.suggestion}</span>`
           )
 
           editor.commands.setContent(animatedContent)
@@ -327,25 +364,41 @@ export function RichTextEditor({
             
             const currentContentAfterAnimation = editor.getHTML()
             
-            // Remove suggestion-applying spans first
+            // Remove suggestion-applying marks/spans first
             let cleanedContent = currentContentAfterAnimation.replace(
-              /<span[^>]*class="[^"]*suggestion-applying[^"]*"[^>]*>(.*?)<\/span>/gi,
-              '$1'
+              /<(span|mark)[^>]*class="[^"]*suggestion-applying[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+              '$2'
             )
             cleanedContent = cleanedContent.replace(
-              /<span[^>]*class='[^']*suggestion-applying[^']*'[^>]*>(.*?)<\/span>/gi,
-              '$1'
+              /<(span|mark)[^>]*class='[^']*suggestion-applying[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+              '$2'
             )
             
             // Replace with highlighted suggestion
             const escapedSuggestion = issue.suggestion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
             const finalContent = cleanedContent.replace(
               new RegExp(`(${escapedSuggestion})`, 'g'),
-              `<span class="suggestion-applied bg-green-100 text-green-800 font-medium px-1 rounded">${issue.suggestion}</span>`
+              `<mark class="suggestion-applied" style="background-color: #d1fae5 !important; color: #065f46 !important; font-weight: 500; padding: 0.125rem 0.25rem; border-radius: 0.25rem; display: inline;">${issue.suggestion}</mark>`
             )
             
             editor.commands.setContent(finalContent)
             onContentChange?.(finalContent)
+            
+            // Force apply styles after content is set
+            setTimeout(() => {
+              const editorElement = editor.view.dom
+              const marks = editorElement.querySelectorAll('mark.suggestion-applied')
+              marks.forEach((mark) => {
+                const htmlMark = mark as HTMLElement
+                htmlMark.style.backgroundColor = '#d1fae5'
+                htmlMark.style.color = '#065f46'
+                htmlMark.style.fontWeight = '500'
+                htmlMark.style.padding = '0.125rem 0.25rem'
+                htmlMark.style.borderRadius = '0.25rem'
+                htmlMark.style.display = 'inline'
+              })
+            }, 50)
+            
             onSuggestionAccept?.(issue.id)
           }, 800)
           return
@@ -358,10 +411,11 @@ export function RichTextEditor({
     // First, show animated highlight - replace original text with suggestion
     const animatedContent = contentToSearch.replace(
       new RegExp(escapedText, 'g'),
-      `<span class="suggestion-applying bg-green-200 text-green-800 font-semibold animate-pulse px-1 rounded">${issue.suggestion}</span>`
+      `<mark class="suggestion-applying" style="background-color: #bbf7d0 !important; color: #065f46 !important; font-weight: 600; padding: 0.125rem 0.25rem; border-radius: 0.25rem; display: inline;">${issue.suggestion}</mark>`
     )
 
     console.log("[Editor] Applied animated highlight")
+    // Use insertContent to preserve HTML structure better
     editor.commands.setContent(animatedContent)
     onContentChange?.(animatedContent)
 
@@ -372,14 +426,14 @@ export function RichTextEditor({
       // Get current content after animation
       const currentContentAfterAnimation = editor.getHTML()
       
-      // Remove suggestion-applying spans first
+      // Remove suggestion-applying marks/spans first
       let cleanedContent = currentContentAfterAnimation.replace(
-        /<span[^>]*class="[^"]*suggestion-applying[^"]*"[^>]*>(.*?)<\/span>/gi,
-        '$1'
+        /<(span|mark)[^>]*class="[^"]*suggestion-applying[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+        '$2'
       )
       cleanedContent = cleanedContent.replace(
-        /<span[^>]*class='[^']*suggestion-applying[^']*'[^>]*>(.*?)<\/span>/gi,
-        '$1'
+        /<(span|mark)[^>]*class='[^']*suggestion-applying[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+        '$2'
       )
       
       // Now replace the suggestion text (or original text if not replaced) with highlighted suggestion
@@ -389,20 +443,36 @@ export function RichTextEditor({
       // Try to replace suggestion first (if already applied), then original text
       let finalContent = cleanedContent.replace(
         new RegExp(`(${escapedSuggestion})`, 'g'),
-        `<span class="suggestion-applied bg-green-100 text-green-800 font-medium px-1 rounded">${issue.suggestion}</span>`
+        `<mark class="suggestion-applied" style="background-color: #d1fae5 !important; color: #065f46 !important; font-weight: 500; padding: 0.125rem 0.25rem; border-radius: 0.25rem; display: inline;">${issue.suggestion}</mark>`
       )
       
       // If no replacement happened, try original text
       if (finalContent === cleanedContent) {
         finalContent = cleanedContent.replace(
           new RegExp(`(${escapedOriginalText})`, 'g'),
-          `<span class="suggestion-applied bg-green-100 text-green-800 font-medium px-1 rounded">${issue.suggestion}</span>`
+          `<mark class="suggestion-applied" style="background-color: #d1fae5 !important; color: #065f46 !important; font-weight: 500; padding: 0.125rem 0.25rem; border-radius: 0.25rem; display: inline;">${issue.suggestion}</mark>`
         )
       }
       
       console.log("[Editor] Applied permanent highlight")
       editor.commands.setContent(finalContent)
       onContentChange?.(finalContent)
+      
+      // Force re-render to ensure CSS is applied
+      setTimeout(() => {
+        const editorElement = editor.view.dom
+        const marks = editorElement.querySelectorAll('mark.suggestion-applied')
+        marks.forEach((mark) => {
+          const htmlMark = mark as HTMLElement
+          if (!htmlMark.style.backgroundColor || htmlMark.style.backgroundColor === '') {
+            htmlMark.style.backgroundColor = '#d1fae5'
+            htmlMark.style.color = '#065f46'
+            htmlMark.style.padding = '0.125rem 0.25rem'
+            htmlMark.style.borderRadius = '0.25rem'
+            htmlMark.style.display = 'inline'
+          }
+        })
+      }, 100)
       onSuggestionAccept?.(issue.id)
     }, 800)
   }, [editor, onContentChange, onSuggestionAccept])
@@ -520,6 +590,27 @@ export function RichTextEditor({
     }
 
     let html = editor.getHTML()
+    
+    // First, protect existing green highlights by temporarily replacing them (both span and mark tags)
+    const greenHighlightPlaceholders: string[] = []
+    html = html.replace(
+      /<(span|mark)[^>]*class="[^"]*suggestion-applied[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+      (match, tag1, content, tag2) => {
+        const placeholder = `__GREEN_HIGHLIGHT_${greenHighlightPlaceholders.length}__`
+        greenHighlightPlaceholders.push(match)
+        return placeholder
+      }
+    )
+    html = html.replace(
+      /<(span|mark)[^>]*class='[^']*suggestion-applied[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+      (match, tag1, content, tag2) => {
+        const placeholder = `__GREEN_HIGHLIGHT_${greenHighlightPlaceholders.length}__`
+        greenHighlightPlaceholders.push(match)
+        return placeholder
+      }
+    )
+    
+    // Now add red highlights for issues
     const sortedIssues = [...analysisIssues].sort((a, b) => b.endPos - a.endPos)
 
     sortedIssues.forEach((issue) => {
@@ -531,6 +622,11 @@ export function RichTextEditor({
         regex,
         `<span class="underline decoration-red-500 decoration-2 bg-red-100 cursor-pointer hover:bg-red-200 transition-all relative group px-0.5 rounded issue-highlight" data-issue-id="${issue.id}" data-issue-type="${issueTypeLabels[issue.type]}">${text}<span class="invisible group-hover:visible absolute bottom-full left-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-50 pointer-events-none">${issueTypeLabels[issue.type]}</span></span>`
       )
+    })
+    
+    // Restore green highlights
+    greenHighlightPlaceholders.forEach((placeholder, index) => {
+      html = html.replace(`__GREEN_HIGHLIGHT_${index}__`, placeholder)
     })
 
     return html
