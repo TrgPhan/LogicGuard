@@ -4,12 +4,11 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useDocument } from "@/lib/document-context"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Save, Download, ChevronLeft, Loader2, Check, Sparkles } from "lucide-react"
 import { RichTextEditor, type AnalysisIssue } from "@/components/rich-text-editor"
 import { ContextSetup } from "@/components/context-setup"
 import { AnalysisIssuesOverlay } from "@/components/analysis-issues-overlay"
-import { DocumentsAPI, EnhancedGoalsAPI } from "@/lib/api-service"
+import { DocumentsAPI, EnhancedGoalsAPI, AnalysisAPI } from "@/lib/api-service"
 import type { GoalDetailResponse } from "@/lib/api-service"
 
 interface ContextDataPayload {
@@ -35,7 +34,9 @@ export default function CanvasPage() {
   const [analysisActive, setAnalysisActive] = useState(false)
   const [analysisIssues, setAnalysisIssues] = useState<AnalysisIssue[]>([])
   const [appliedSuggestions, setAppliedSuggestions] = useState<string[]>([])
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
   const initialContentRef = useRef<string>("")
+  const editorHandleIssueClickRef = useRef<((issue: AnalysisIssue) => void) | null>(null)
 
   const docId = searchParams.get("docId") || selectedDocumentId
 
@@ -164,6 +165,30 @@ export default function CanvasPage() {
     }
   }
 
+  // Function to strip suggestion highlight HTML tags before saving
+  const stripSuggestionHighlights = (html: string): string => {
+    // Remove suggestion-applied spans but keep the text content
+    // Handle both single and double quotes in class attribute
+    let cleaned = html.replace(
+      /<span[^>]*class="[^"]*suggestion-applied[^"]*"[^>]*>(.*?)<\/span>/gi,
+      '$1'
+    )
+    cleaned = cleaned.replace(
+      /<span[^>]*class='[^']*suggestion-applied[^']*'[^>]*>(.*?)<\/span>/gi,
+      '$1'
+    )
+    // Also remove suggestion-applying spans
+    cleaned = cleaned.replace(
+      /<span[^>]*class="[^"]*suggestion-applying[^"]*"[^>]*>(.*?)<\/span>/gi,
+      '$1'
+    )
+    cleaned = cleaned.replace(
+      /<span[^>]*class='[^']*suggestion-applying[^']*'[^>]*>(.*?)<\/span>/gi,
+      '$1'
+    )
+    return cleaned
+  }
+
   const handleSave = async () => {
     if (!docId) return
 
@@ -172,11 +197,15 @@ export default function CanvasPage() {
     setError(null)
 
     try {
+      // Strip suggestion highlight HTML tags before saving
+      const cleanedContent = stripSuggestionHighlights(editorContent)
+      
       await DocumentsAPI.update(docId, {
-        content_full: editorContent,
+        content_full: cleanedContent,
       })
 
-      initialContentRef.current = editorContent
+      // Update initial content ref with cleaned content
+      initialContentRef.current = cleanedContent
       setHasUnsavedChanges(false)
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 2000)
@@ -219,11 +248,112 @@ export default function CanvasPage() {
     }
   }
 
-  const handleAnalyze = () => {
+  const mapErrorToIssue = (error: any, index: number): AnalysisIssue => {
+    // Map backend error types to frontend issue types
+    const typeMap: Record<string, AnalysisIssue["type"]> = {
+      "contradiction": "logic_contradiction",
+      "logic_gap": "logic_gap",
+      "unsupported_claim": "weak_evidence",
+      "undefined_technical_term": "clarity_issue",
+      "unclear_term": "clarity_issue",
+    }
+    
+    const issueType = typeMap[error.error_type] || "clarity_issue"
+    const text = error.meta?.text || error.meta?.term || error.meta?.claim || ""
+    const suggestion = error.meta?.suggestion || ""
+    
+    // Try to find text position in content
+    let startPos = 0
+    let endPos = 0
+    if (text && editorContent) {
+      const textLower = text.toLowerCase()
+      const contentLower = editorContent.toLowerCase()
+      const pos = contentLower.indexOf(textLower)
+      if (pos !== -1) {
+        startPos = pos
+        endPos = pos + text.length
+      }
+    }
+    
+    return {
+      id: error.id,
+      type: issueType,
+      startPos,
+      endPos,
+      message: error.message,
+      text: text,
+      suggestion: suggestion || undefined,
+    }
+  }
+
+  const handleAnalyze = async () => {
+    if (!docId) return
+    
     if (!analysisActive) {
-      // Enable analysis mode and show mock issues
-      setAnalysisIssues(mockAnalysisIssues)
-      setAnalysisActive(true)
+      // Start analysis
+      setIsAnalyzing(true)
+      setError(null)
+      
+      try {
+        console.log("[Analyze] Starting analysis for document:", docId)
+        
+        // Trigger analysis
+        const analysisResponse = await AnalysisAPI.analyze(docId)
+        console.log("[Analyze] Analysis triggered:", analysisResponse)
+        
+        // Poll for completion (max 30 seconds)
+        let attempts = 0
+        const maxAttempts = 10
+        let result = null
+        
+        while (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 3000))
+          attempts++
+          
+          try {
+            result = await AnalysisAPI.getLatestAnalysis(docId)
+            console.log("[Analyze] Attempt", attempts, "Status:", result.analysis_run.status)
+            
+            if (result.analysis_run.status === "completed") {
+              break
+            } else if (result.analysis_run.status === "failed") {
+              throw new Error(result.analysis_run.error_message || "Analysis failed")
+            }
+          } catch (err: any) {
+            // If analysis not found yet, continue polling
+            if (err.message?.includes("No completed analysis")) {
+              console.log("[Analyze] Analysis still running, waiting...")
+              continue
+            }
+            throw err
+          }
+        }
+        
+        if (!result) {
+          throw new Error("Analysis timeout - please try again")
+        }
+        
+        // Map errors to issues
+        const issues = result.errors.map((error, index) => mapErrorToIssue(error, index))
+        console.log("[Analyze] Found", issues.length, "issues")
+        
+        setAnalysisIssues(issues)
+        setAnalysisActive(true)
+      } catch (err: any) {
+        console.error("[Analyze] Error:", err)
+        
+        // Better error messages
+        let errorMessage = "Failed to analyze document"
+        if (err.message) {
+          errorMessage = err.message
+        } else if (err instanceof TypeError && err.message.includes("fetch")) {
+          errorMessage = "Network error - please check if backend is running"
+        }
+        
+        setError(errorMessage)
+      } finally {
+        setIsAnalyzing(false)
+      }
     } else {
       // Disable analysis mode and clear issues
       setAnalysisIssues([])
@@ -232,7 +362,19 @@ export default function CanvasPage() {
     }
   }
 
+  const handleEditorIssueClickReady = (handleIssueClick: (issue: AnalysisIssue) => void) => {
+    editorHandleIssueClickRef.current = handleIssueClick
+  }
+
   const handleSuggestionClick = (issue: AnalysisIssue) => {
+    // Call the editor's handleIssueClick function to apply the suggestion
+    if (editorHandleIssueClickRef.current) {
+      console.log("[Canvas] Calling editor handleIssueClick for issue:", issue.id)
+      editorHandleIssueClickRef.current(issue)
+    } else {
+      console.warn("[Canvas] Editor handleIssueClick not available yet")
+    }
+    
     // Remove the issue from the list when clicked
     setAnalysisIssues(analysisIssues.filter(i => i.id !== issue.id))
     setAppliedSuggestions([...appliedSuggestions, issue.id])
@@ -302,10 +444,20 @@ export default function CanvasPage() {
           </Button>
           <Button
             onClick={handleAnalyze}
+            disabled={isAnalyzing}
             className={`gap-2 ${analysisActive ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#37322F] hover:bg-[#37322F]/90'}`}
           >
-            <Sparkles className="h-4 w-4" />
-            {analysisActive ? 'Analysis Active' : 'Analyze'}
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                {analysisActive ? 'Analysis Active' : 'Analyze'}
+              </>
+            )}
           </Button>
           <Button
             className="gap-2 bg-[#37322F] hover:bg-[#37322F]/90"
@@ -325,6 +477,7 @@ export default function CanvasPage() {
             analysisActive={analysisActive}
             analysisIssues={analysisIssues}
             onSuggestionAccept={handleSuggestionAccept}
+            onIssueClick={handleEditorIssueClickReady}
           />
         </div>
 
@@ -335,35 +488,7 @@ export default function CanvasPage() {
               onSuggestionClick={handleSuggestionClick}
             />
           ) : (
-            <>
-              <Card className="border-[rgba(55,50,47,0.12)]">
-                <CardHeader>
-                  <CardTitle className="text-base">Writing Type</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="text-sm space-y-2">
-                    <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
-                      <input type="radio" id="essay" name="writing-type" defaultChecked className="h-4 w-4" />
-                      <label htmlFor="essay" className="text-[#37322F] cursor-pointer">Essay</label>
-                    </div>
-                    <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
-                      <input type="radio" id="research" name="writing-type" className="h-4 w-4" />
-                      <label htmlFor="research" className="text-[#37322F] cursor-pointer">Research Paper</label>
-                    </div>
-                    <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
-                      <input type="radio" id="proposal" name="writing-type" className="h-4 w-4" />
-                      <label htmlFor="proposal" className="text-[#37322F] cursor-pointer">Business Proposal</label>
-                    </div>
-                    <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
-                      <input type="radio" id="review" name="writing-type" className="h-4 w-4" />
-                      <label htmlFor="review" className="text-[#37322F] cursor-pointer">Literature Review</label>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <ContextSetup goal={currentGoal} onApply={handleContextApply} />
-            </>
+            <ContextSetup goal={currentGoal} onApply={handleContextApply} />
           )}
         </div>
       </div>

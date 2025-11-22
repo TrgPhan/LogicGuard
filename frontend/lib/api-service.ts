@@ -36,8 +36,15 @@ async function handleResponse<T>(response: Response): Promise<T> {
             throw new Error("Authentication required. Please login again.")
         }
 
-        const error = await response.json().catch(() => ({ message: "An error occurred" }))
-        throw new Error(error.message || `HTTP error! status: ${response.status}`)
+        let errorMessage = `HTTP error! status: ${response.status}`
+        try {
+            const error = await response.json()
+            errorMessage = error.detail || error.message || errorMessage
+        } catch {
+            // If response is not JSON, use status text
+            errorMessage = response.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
     }
     return response.json()
 }
@@ -141,13 +148,93 @@ export const GoalsAPI = {
     },
 }
 
+export interface LogicError {
+    id: string
+    error_type: string
+    error_category: string
+    severity: string
+    message: string
+    meta?: {
+        text?: string
+        term?: string
+        claim?: string
+        suggestion?: string
+        [key: string]: any
+    }
+    p_index?: number
+    s_index?: number
+    is_resolved: boolean
+    created_at: string
+}
+
+export interface AnalysisResult {
+    analysis_run: {
+        id: string
+        document_id: string
+        doc_version: number
+        analysis_type: string
+        trigger_source: string
+        status: string
+        created_at: string
+        stats?: {
+            total_issues: number
+            contradictions: number
+            undefined_terms: number
+            unsupported_claims: number
+            logical_jumps: number
+            document_quality_score: number
+        }
+        error_message?: string
+    }
+    errors: LogicError[]
+    total_issues: number
+}
+
 export const AnalysisAPI = {
-    async analyze(documentId: string): Promise<{ status: string }> {
-        const response = await fetch(`${API_BASE_URL}/documents/${documentId}/analyze`, {
-            method: "POST",
-            headers: getHeaders(getToken() || undefined),
-        })
-        return handleResponse<{ status: string }>(response)
+    async analyze(documentId: string): Promise<{ id: string; status: string }> {
+        try {
+            const url = `${API_BASE_URL}/analysis/documents/${documentId}/analyze`
+            console.log("[API] Analyzing document:", url)
+            
+            const response = await fetch(url, {
+                method: "POST",
+                headers: getHeaders(getToken() || undefined),
+                body: JSON.stringify({ trigger_source: "manual" }),
+            })
+            
+            if (!response.ok) {
+                const errorText = await response.text()
+                console.error("[API] Analysis error response:", errorText)
+            }
+            
+            return handleResponse<{ id: string; status: string }>(response)
+        } catch (error: any) {
+            console.error("[API] Analysis fetch error:", error)
+            if (error.message?.includes("fetch")) {
+                throw new Error("Cannot connect to server. Please check if backend is running.")
+            }
+            throw error
+        }
+    },
+    
+    async getLatestAnalysis(documentId: string): Promise<AnalysisResult> {
+        try {
+            const url = `${API_BASE_URL}/analysis/documents/${documentId}/analysis/latest`
+            console.log("[API] Getting latest analysis:", url)
+            
+            const response = await fetch(url, {
+                method: "GET",
+                headers: getHeaders(getToken() || undefined),
+            })
+            
+            return handleResponse<AnalysisResult>(response)
+        } catch (error: any) {
+            console.error("[API] Get latest analysis error:", error)
+            if (error.message?.includes("fetch")) {
+                throw new Error("Cannot connect to server. Please check if backend is running.")
+            }
+            throw error
+        }
     },
 }
 

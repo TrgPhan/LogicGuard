@@ -303,8 +303,29 @@ def analyze_document(context: Dict[str, Any], content: str, language: str = "en"
         # Generate response from Gemini
         lang_msg = "Đang phân tích văn bản toàn diện (4 nhiệm vụ)..." if language == "vi" else "Analyzing document comprehensively (all 4 subtasks)..."
         print(lang_msg)
-        response = model.generate_content(prompt)
-        response_text = response.text.strip()
+        
+        try:
+            # Add timeout and better error handling
+            import time
+            start_time = time.time()
+            print(f"[AI] Calling Gemini API... (this may take 30-120 seconds)")
+            
+            response = model.generate_content(prompt)
+            
+            elapsed_time = time.time() - start_time
+            print(f"[AI] Gemini API call completed in {elapsed_time:.2f} seconds")
+            
+            if not response or not hasattr(response, 'text'):
+                raise Exception("Empty or invalid response from Gemini API")
+            
+            response_text = response.text.strip()
+            print(f"[AI] Response received, length: {len(response_text)} characters")
+            
+        except Exception as api_error:
+            error_msg = f"Gemini API error: {str(api_error)}"
+            print(f"❌ {error_msg}")
+            result["metadata"]["error"] = error_msg
+            return result
         
         # Parse JSON response (response_schema ensures clean JSON)
         llm_result = json.loads(response_text)
