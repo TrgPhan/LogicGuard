@@ -4,9 +4,9 @@ term_normalizer.py
 Spell & Term Normalization (safe + lightweight)
 ----------------------------------------------
 Mục tiêu:
-- Không thay đổi mạnh văn bản
-- Chỉ chuẩn hóa nhẹ
-- Xuất ra cấu trúc NormalizationResult mà Analysis.py yêu cầu:
+- Không thay đổi mạnh văn bản người dùng
+- Chỉ chuẩn hóa nhẹ, dựa trên một số pattern phổ biến
+- Xuất ra NormalizationResult cho Analysis.py:
     * spelling_corrections
     * term_mappings
     * normalized_text
@@ -23,7 +23,7 @@ import re
 @dataclass
 class NormalizationResult:
     """
-    Chuẩn hóa văn bản mức nhẹ.
+    Kết quả chuẩn hóa văn bản mức nhẹ.
     """
     original_text: str
     normalized_text: str
@@ -38,6 +38,7 @@ class NormalizationResult:
 
 # ====== BASIC REPLACEMENTS ======
 # Có thể mở rộng dần theo nhu cầu thực tế.
+
 # EN: lỗi chính tả / ghép từ tiếng Anh
 BASIC_REPLACEMENTS_EN: Dict[str, str] = {
     # Deep learning / AI
@@ -58,12 +59,27 @@ BASIC_REPLACEMENTS_EN: Dict[str, str] = {
     "samsungg": "Samsung",
 }
 
-# VI: lỗi chính tả / dấu tiếng Việt
+# VI: lỗi chính tả / cụm sai thường gặp trong ngữ cảnh học thuật / logic
 BASIC_REPLACEMENTS_VI: Dict[str, str] = {
+    # AI / công nghệ
     "trí tuệ nhân tạoo": "trí tuệ nhân tạo",
     "tri tue nhan tao": "trí tuệ nhân tạo",
     "cong nghe": "công nghệ",
     "khoa hoc du lieu": "khoa học dữ liệu",
+
+    # Các lỗi bạn đang test trong ví dụ logic
+    "sức khẻ": "sức khỏe",
+    "bằng trứng khoa học": "bằng chứng khoa học",
+    "nướt tăng lực": "nước tăng lực",
+    "nướt hồi sinh": "nước hồi sinh",
+    "chồng cây": "trồng cây",
+    "kích hoặt năng lượng não bộ": "kích hoạt năng lượng não bộ",
+    "kích hoặt": "kích hoạt",
+    "khởi hoạc luồng trí tuệ sâu": "khởi hoạt luồng trí tuệ sâu",
+    "khởi hoạc": "khởi hoạt",
+    "cơ thẻ": "cơ thể",
+    "tái tạo trỉ": "tái tạo chỉ",
+    "nghiên cứ": "nghiên cứu",
 }
 
 
@@ -95,9 +111,8 @@ def _apply_basic_replacements(text: str, replacements: Dict[str, str]) -> Normal
                 "reason": "basic_replacement",
             }
 
-            # Ở bản MVP: coi tất cả là spelling correction.
+            # MVP: coi tất cả là spelling correction + term mapping
             spelling_corrections.append(record)
-            # Nếu sau này muốn tách term_mappings riêng thì chỉnh lại chỗ này.
             term_mappings.append(record)
             mappings.append(record)
 
@@ -117,10 +132,11 @@ def normalize_text(text: str, language: str = "vi") -> NormalizationResult:
     """
     Hàm gọi chính — dùng trong Analysis.py
 
-    - Không can thiệp mạnh vào văn bản người dùng.
+    - KHÔNG còn bóp méo whitespace để giữ vị trí (start_pos / end_pos)
+      khớp với CHUỖI GỐC mà user gửi.
     - Chủ yếu dùng để:
-        + Gợi ý các lỗi chính tả / từ sai phổ biến (EN + VI)
-        + Log lại vị trí thay thế để FE có thể highlight nếu muốn.
+        + Gợi ý các lỗi chính tả / cụm sai phổ biến (EN + VI)
+        + Log lại vị trí để FE có thể highlight nếu muốn.
     """
     if not text:
         return NormalizationResult(
@@ -131,23 +147,19 @@ def normalize_text(text: str, language: str = "vi") -> NormalizationResult:
             mappings=[],
         )
 
-    # 1) Chuẩn hóa xuống dòng & space (nhẹ)
     original_text = text
-    working = text.strip()
-    # Gộp nhiều whitespace thành 1 space để việc match dễ hơn
-    working = re.sub(r"\s+", " ", working)
 
-    # 2) Chọn bộ replacements
-    # Hiện tại: dùng chung cả EN + VI cho mọi language,
-    # vì bài viết thường trộn tiếng Việt + thuật ngữ tiếng Anh.
-    # Sau này nếu muốn tách riêng theo language thì chỉnh ở đây.
+    # Không re.sub \s+ nữa để không lệch index
+    working = text
+
+    # Dùng chung cả EN + VI, vì văn bản thường trộn 2 thứ tiếng
     all_replacements: Dict[str, str] = {}
     all_replacements.update(BASIC_REPLACEMENTS_EN)
     all_replacements.update(BASIC_REPLACEMENTS_VI)
 
     basic = _apply_basic_replacements(working, all_replacements)
 
-    # 3) Trả về kết quả, nhưng giữ original_text thật (nguyên văn user nhập)
+    # Trả về: original_text là đúng văn bản gốc, normalized_text là bản đã sửa nhẹ
     return NormalizationResult(
         original_text=original_text,
         normalized_text=basic.normalized_text,

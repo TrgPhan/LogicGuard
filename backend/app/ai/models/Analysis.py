@@ -8,15 +8,9 @@ Analysis - Gộp 4 Subtasks + Spelling
 5. Spelling Errors (Lỗi chính tả EN + VI)
 
 Mục tiêu:
-Phân tích toàn diện văn bản trong một lần gọi API duy nhất,
-phát hiện tất cả các vấn đề về logic, terminology, evidence, coherence và spelling.
-
-Đầu vào:
-- Context (ngữ cảnh)
-- Content (văn bản thô)
-
-Đầu ra:
-Comprehensive JSON structure với đầy đủ 5 subtasks + summary
+- Phân tích toàn diện văn bản trong một lần gọi API duy nhất.
+- ƯU TIÊN: Spell & Term Normalization (Surface Quality) chạy trước,
+  sau đó mới phân tích các vấn đề logic / khái niệm.
 """
 
 from typing import Dict, Any, List, Optional
@@ -167,7 +161,7 @@ RESPONSE_SCHEMA: Dict[str, Any] = {
             },
             "required": ["total_found", "items"],
         },
-        # Spelling errors (EN + VI) do Gemini trả về
+        # Spelling errors (EN + VI) do Gemini + rule-based trả về
         "spelling_errors": {
             "type": "object",
             "properties": {
@@ -230,6 +224,11 @@ def analyze_document(
     """
     Phân tích toàn diện văn bản với 5 subtasks trong một lần gọi.
     (4 logic + 1 spelling)
+
+    Flow ưu tiên:
+    1) Spell & Term Normalization (rule-based) → phát hiện lỗi chính tả rõ ràng trước.
+    2) Gọi Gemini unified analysis (5 subtasks).
+    3) Merge lỗi chính tả rule-based vào block spelling_errors của kết quả cuối.
     """
 
     selected_model = GEMINI_MODEL  # luôn dùng 1 model Gemini 2.5
@@ -278,12 +277,10 @@ def analyze_document(
             result["metadata"]["error"] = f"Invalid language '{language}'. Use 'en' or 'vi'."
             return result
 
-        # -------- 1) SPELL & TERM NORMALIZATION (nhẹ, an toàn) --------
+        # -------- 1) SPELL & TERM NORMALIZATION (ưu tiên chạy TRƯỚC) --------
         norm: NormalizationResult = normalize_text(content, language=language)
 
-        # Feed văn bản gốc vào LLM, không thay đổi text user
-        normalized_content_for_llm = content
-
+        # Đưa thông tin normalization vào metadata
         result["metadata"]["normalization"] = {
             "changed": norm.normalized_text != norm.original_text,
             "total_spelling_corrections": len(getattr(norm, "spelling_corrections", [])),
@@ -300,6 +297,9 @@ def analyze_document(
                 f"term_mappings={result['metadata']['normalization']['total_term_mappings']})"
             )
 
+        # DÙ đã normalize, vẫn feed VĂN BẢN GỐC vào Gemini
+        normalized_content_for_llm = content
+
         # -------- 2) Build prompt theo ngôn ngữ --------
         if language == "vi":
             prompt = prompt_analysis_vi(context, normalized_content_for_llm)
@@ -310,11 +310,21 @@ def analyze_document(
 
         result["analysis_metadata"]["language"] = language
 
-        # -------- 3) Gọi Gemini với schema --------
-        generation_config = GenerationConfig(
-            response_mime_type="application/json",
-            response_schema=RESPONSE_SCHEMA,
-        )
+        # -------- 3) Gọi Gemini với cấu hình phù hợp ngôn ngữ --------
+        #
+        # EN: dùng response_schema đầy đủ (ổn định, ít biến thể).
+        # VI: bỏ response_schema để Gemini tự do trả thêm spelling_errors,
+        #     vì tiếng Việt + mix EN-VI nhiều, schema cứng quá thì model hay skip block này.
+        if language == "vi":
+            generation_config = GenerationConfig(
+                response_mime_type="application/json",
+            )
+        else:
+            generation_config = GenerationConfig(
+                response_mime_type="application/json",
+                response_schema=RESPONSE_SCHEMA,
+            )
+
         model = genai.GenerativeModel(
             selected_model,
             generation_config=generation_config,
@@ -327,7 +337,6 @@ def analyze_document(
         )
         print(f"{lang_msg} | model={selected_model} | mode_flag={mode}")
 
-        # Retry parse JSON tối đa 2 lần
         last_error: Optional[Exception] = None
         llm_result: Optional[Dict[str, Any]] = None
         response_text: str = ""
@@ -351,7 +360,7 @@ def analyze_document(
 
         result["success"] = True
 
-        # -------- Merge kết quả từ LLM vào result chuẩn --------
+        # -------- 4) Merge kết quả từ LLM vào result chuẩn --------
 
         # analysis_metadata
         if "analysis_metadata" in llm_result:
@@ -359,7 +368,10 @@ def analyze_document(
 
         # contradictions
         if "contradictions" in llm_result:
-            result["contradictions"] = llm_result["contradictions"]
+            result["contradictions"] = llm_result["contradictions"] or {
+                "total_found": 0,
+                "items": [],
+            }
             if "total_found" not in result["contradictions"]:
                 result["contradictions"]["total_found"] = len(
                     result["contradictions"].get("items", []) or []
@@ -367,7 +379,10 @@ def analyze_document(
 
         # undefined_terms
         if "undefined_terms" in llm_result:
-            result["undefined_terms"] = llm_result["undefined_terms"]
+            result["undefined_terms"] = llm_result["undefined_terms"] or {
+                "total_found": 0,
+                "items": [],
+            }
             if "total_found" not in result["undefined_terms"]:
                 result["undefined_terms"]["total_found"] = len(
                     result["undefined_terms"].get("items", []) or []
@@ -375,7 +390,10 @@ def analyze_document(
 
         # unsupported_claims
         if "unsupported_claims" in llm_result:
-            result["unsupported_claims"] = llm_result["unsupported_claims"]
+            result["unsupported_claims"] = llm_result["unsupported_claims"] or {
+                "total_found": 0,
+                "items": [],
+            }
             if "total_found" not in result["unsupported_claims"]:
                 result["unsupported_claims"]["total_found"] = len(
                     result["unsupported_claims"].get("items", []) or []
@@ -383,32 +401,91 @@ def analyze_document(
 
         # logical_jumps
         if "logical_jumps" in llm_result:
-            result["logical_jumps"] = llm_result["logical_jumps"]
+            result["logical_jumps"] = llm_result["logical_jumps"] or {
+                "total_found": 0,
+                "items": [],
+            }
             if "total_found" not in result["logical_jumps"]:
                 result["logical_jumps"]["total_found"] = len(
                     result["logical_jumps"].get("items", []) or []
                 )
 
-        # spelling_errors
+        # spelling_errors từ Gemini (có thể trống)
         if "spelling_errors" in llm_result:
-            result["spelling_errors"] = llm_result["spelling_errors"]
+            result["spelling_errors"] = llm_result["spelling_errors"] or {
+                "total_found": 0,
+                "items": [],
+            }
             if "total_found" not in result["spelling_errors"]:
                 result["spelling_errors"]["total_found"] = len(
                     result["spelling_errors"].get("items", []) or []
                 )
 
-        # summary
-        if "summary" in llm_result:
-            result["summary"] = llm_result["summary"]
+        # -------- 5) MERGE lỗi chính tả rule-based vào spelling_errors chính --------
+        try:
+            rb_corrections = norm.spelling_corrections or []
+        except Exception:
+            rb_corrections = []
+
+        if rb_corrections:
+            sp_block = result.get("spelling_errors") or {"total_found": 0, "items": []}
+            items = sp_block.get("items") or []
+
+            seen_keys = {
+                (
+                    it.get("start_pos"),
+                    it.get("end_pos"),
+                    (it.get("original") or "").lower(),
+                )
+                for it in items
+            }
+
+            for corr in rb_corrections:
+                key = (
+                    corr.get("start_pos"),
+                    corr.get("end_pos"),
+                    (corr.get("original") or "").lower(),
+                )
+                if key in seen_keys:
+                    continue
+
+                items.append(
+                    {
+                        "original": corr.get("original", ""),
+                        "suggested": corr.get("normalized", ""),
+                        "start_pos": corr.get("start_pos", -1),
+                        "end_pos": corr.get("end_pos", -1),
+                        "language": language,
+                        "reason": corr.get("reason", "rule_based_detection"),
+                    }
+                )
+                seen_keys.add(key)
+
+            sp_block["items"] = items
+            sp_block["total_found"] = len(items)
+            result["spelling_errors"] = sp_block
+
+        # -------- 6) Summary: tính lại total_issues cho chắc ăn --------
+        total_issues = (
+            result["contradictions"]["total_found"]
+            + result["undefined_terms"]["total_found"]
+            + result["unsupported_claims"]["total_found"]
+            + result["logical_jumps"]["total_found"]
+            + result["spelling_errors"]["total_found"]
+        )
+
+        if not result.get("summary"):
+            result["summary"] = {
+                "total_issues": total_issues,
+                "critical_issues": 0,
+                "document_quality_score": 0,
+                "key_recommendations": [],
+            }
         else:
-            total = (
-                result["contradictions"]["total_found"]
-                + result["undefined_terms"]["total_found"]
-                + result["unsupported_claims"]["total_found"]
-                + result["logical_jumps"]["total_found"]
-                + result["spelling_errors"]["total_found"]
-            )
-            result["summary"]["total_issues"] = total
+            result["summary"]["total_issues"] = total_issues
+            result["summary"].setdefault("critical_issues", 0)
+            result["summary"].setdefault("document_quality_score", 0)
+            result["summary"].setdefault("key_recommendations", [])
 
         print(
             f"✅ Phân tích hoàn tất. "

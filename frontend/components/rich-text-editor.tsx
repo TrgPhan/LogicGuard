@@ -31,7 +31,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
-  Minus
+  Minus,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -41,7 +41,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
@@ -53,21 +53,27 @@ interface RichTextEditorProps {
   onSuggestionAccept?: (issueId: string) => void
 }
 
-export interface AnalysisIssue {
+export type AnalysisIssue = {
   id: string
-  type: "logic_contradiction" | "logic_gap" | "weak_evidence" | "clarity_issue"
+  type:
+    | "logic_contradiction"
+    | "logic_gap"
+    | "weak_evidence"
+    | "clarity_issue"
+    | "undefined_term"
   startPos: number
   endPos: number
-  suggestion?: string
+  text: string
   message: string
-  text?: string
+  suggestion?: string
 }
 
-const issueTypeLabels: Record<string, string> = {
+const issueTypeLabels: Record<AnalysisIssue["type"], string> = {
   logic_contradiction: "Logic Contradiction",
   logic_gap: "Logic Gap",
   weak_evidence: "Weak Evidence",
   clarity_issue: "Clarity Issue",
+  undefined_term: "Undefined Term",
 }
 
 export function RichTextEditor({
@@ -75,7 +81,7 @@ export function RichTextEditor({
   initialContent,
   analysisActive = false,
   analysisIssues = [],
-  onSuggestionAccept
+  onSuggestionAccept,
 }: RichTextEditorProps) {
   const [replacedWords, setReplacedWords] = useState<Set<string>>(new Set())
   const [selectedBlock, setSelectedBlock] = useState("Text")
@@ -87,8 +93,8 @@ export function RichTextEditor({
     extensions: [
       StarterKit.configure({
         heading: {
-          levels: [1, 2, 3]
-        }
+          levels: [1, 2, 3],
+        },
       }),
       Highlight.configure({ multicolor: true }),
       Underline,
@@ -97,7 +103,7 @@ export function RichTextEditor({
       FontFamily.configure({ types: ["textStyle"] }),
       Link.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
       TaskList.configure({ HTMLAttributes: { class: "not-prose" } }),
-      TaskItem.configure({ nested: true })
+      TaskItem.configure({ nested: true }),
     ],
     content: initialContent || "<p>Start typing your content here...</p>",
     immediatelyRender: false,
@@ -112,7 +118,7 @@ export function RichTextEditor({
     Small: "0.9375rem",
     Medium: "1rem",
     Large: "1.125rem",
-    "Extra Large": "1.25rem"
+    "Extra Large": "1.25rem",
   }
 
   type FontSizeLabel = keyof typeof fontSizes
@@ -135,7 +141,7 @@ export function RichTextEditor({
                 ? "Numbered list"
                 : "Text"
 
-      setSelectedBlock((prev) => (prev === nextBlockLabel ? prev : nextBlockLabel))
+      setSelectedBlock(prev => (prev === nextBlockLabel ? prev : nextBlockLabel))
 
       const textStyleAttrs = editor.getAttributes("textStyle") as {
         fontFamily?: string
@@ -144,15 +150,15 @@ export function RichTextEditor({
       }
 
       const nextFont = textStyleAttrs.fontFamily || "Inter"
-      setSelectedFont((prev) => (prev === nextFont ? prev : nextFont))
+      setSelectedFont(prev => (prev === nextFont ? prev : nextFont))
 
       const fontSizeEntry = (Object.entries(fontSizes) as [FontSizeLabel, string][])
         .find(([, value]) => value === textStyleAttrs.fontSize)
       const nextSize = fontSizeEntry ? fontSizeEntry[0] : "Medium"
-      setSelectedSize((prev) => (prev === nextSize ? prev : nextSize))
+      setSelectedSize(prev => (prev === nextSize ? prev : nextSize))
 
       const nextColor = textStyleAttrs.color || "#37322F"
-      setFontColor((prev) => (prev === nextColor ? prev : nextColor))
+      setFontColor(prev => (prev === nextColor ? prev : nextColor))
     }
 
     editor.on("selectionUpdate", syncToolbarState)
@@ -163,17 +169,22 @@ export function RichTextEditor({
       editor.off("selectionUpdate", syncToolbarState)
       editor.off("transaction", syncToolbarState)
     }
-  }, [editor])
+  }, [editor, fontSizes])
 
-  // Clean up replaced words when analysis is disabled
   if (editor && !analysisActive && replacedWords.size > 0) {
     const currentContent = editor.getHTML()
     let cleanedContent = currentContent
 
-    replacedWords.forEach((word) => {
+    replacedWords.forEach(word => {
       cleanedContent = cleanedContent.replace(
-        new RegExp(`<span class="bg-green-100 text-green-700 font-semibold animate-pulse">${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</span>`, 'g'),
-        word
+        new RegExp(
+          `<span class="bg-green-100 text-green-700 font-semibold animate-pulse">${word.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&",
+          )}</span>`,
+          "g",
+        ),
+        word,
       )
     })
 
@@ -239,18 +250,11 @@ export function RichTextEditor({
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run()
   }
 
-  const renderBlockMenuItem = (
-    label: string,
-    Icon: LucideIcon,
-    action: () => boolean
-  ) => (
+  const renderBlockMenuItem = (label: string, Icon: LucideIcon, action: () => boolean) => (
     <DropdownMenuItem
       onClick={() => handleBlockSelect(label, action)}
       disabled={analysisActive}
-      className={cn(
-        "flex items-center gap-2 text-sm",
-        selectedBlock === label && "bg-muted"
-      )}
+      className={cn("flex items-center gap-2 text-sm", selectedBlock === label && "bg-muted")}
     >
       <Icon className="h-4 w-4" />
       <span>{label}</span>
@@ -262,14 +266,15 @@ export function RichTextEditor({
     focusChain().setColor(value).run()
     setFontColor(value)
   }
+
   const handleIssueClick = (issue: AnalysisIssue) => {
     if (!issue.suggestion || !issue.text) return
 
     const currentContent = editor.getHTML()
-    const escapedText = issue.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const escapedText = issue.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     const newContent = currentContent.replace(
-      new RegExp(escapedText, 'g'),
-      `<span class="bg-green-100 text-green-700 font-semibold animate-pulse">${issue.suggestion}</span>`
+      new RegExp(escapedText, "g"),
+      `<span class="bg-green-100 text-green-700 font-semibold animate-pulse">${issue.suggestion}</span>`,
     )
 
     editor.commands.setContent(newContent)
@@ -281,11 +286,8 @@ export function RichTextEditor({
 
     setTimeout(() => {
       if (!issue.text || !issue.suggestion) return
-      const escapedText = issue.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const finalContent = currentContent.replace(
-        new RegExp(escapedText, 'g'),
-        issue.suggestion
-      )
+      const escapedTextInner = issue.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      const finalContent = currentContent.replace(new RegExp(escapedTextInner, "g"), issue.suggestion)
       editor.commands.setContent(finalContent)
       onContentChange?.(finalContent)
       onSuggestionAccept?.(issue.id)
@@ -300,14 +302,18 @@ export function RichTextEditor({
     let html = editor.getHTML()
     const sortedIssues = [...analysisIssues].sort((a, b) => b.endPos - a.endPos)
 
-    sortedIssues.forEach((issue) => {
-      const text = issue.text || "error"
-      const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    sortedIssues.forEach(issue => {
+      if (!issue.text) return
+
+      const text = issue.text
+      const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
       const regex = new RegExp(`(${escapedText})`, "g")
+
+      const label = issueTypeLabels[issue.type] ?? "Issue"
 
       html = html.replace(
         regex,
-        `<span class="underline decoration-red-500 decoration-2 bg-red-100 cursor-pointer hover:bg-red-200 transition-all relative group px-0.5 rounded issue-highlight" data-issue-id="${issue.id}" data-issue-type="${issueTypeLabels[issue.type]}">${text}<span class="invisible group-hover:visible absolute bottom-full left-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-50 pointer-events-none">${issueTypeLabels[issue.type]}</span></span>`
+        `<span class="underline decoration-red-500 decoration-2 bg-red-100 cursor-pointer hover:bg-red-200 transition-all relative group px-0.5 rounded issue-highlight" data-issue-id="${issue.id}" data-issue-type="${label}">${text}<span class="invisible group-hover:visible absolute bottom-full left-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-50 pointer-events-none">${label}</span></span>`,
       )
     })
 
@@ -321,6 +327,7 @@ export function RichTextEditor({
           <CardTitle className="text-lg">Document Editor</CardTitle>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Block type */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -367,6 +374,7 @@ export function RichTextEditor({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Font family */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -380,21 +388,21 @@ export function RichTextEditor({
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-40">
               <DropdownMenuLabel>Sans Serif</DropdownMenuLabel>
-              {["Inter", "Arial", "Helvetica"].map((font) => (
+              {["Inter", "Arial", "Helvetica"].map(font => (
                 <DropdownMenuItem key={font} onClick={() => handleFontFamilyChange(font)}>
                   {font}
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Serif</DropdownMenuLabel>
-              {["Times New Roman", "Garamond", "Georgia"].map((font) => (
+              {["Times New Roman", "Garamond", "Georgia"].map(font => (
                 <DropdownMenuItem key={font} onClick={() => handleFontFamilyChange(font)}>
                   {font}
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Monospace</DropdownMenuLabel>
-              {["Courier", "Courier New"].map((font) => (
+              {["Courier", "Courier New"].map(font => (
                 <DropdownMenuItem key={font} onClick={() => handleFontFamilyChange(font)}>
                   {font}
                 </DropdownMenuItem>
@@ -402,6 +410,7 @@ export function RichTextEditor({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Font size */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -414,8 +423,11 @@ export function RichTextEditor({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-36">
-              {Object.keys(fontSizes).map((size) => (
-                <DropdownMenuItem key={size} onClick={() => handleFontSizeChange(size as keyof typeof fontSizes)}>
+              {Object.keys(fontSizes).map(size => (
+                <DropdownMenuItem
+                  key={size}
+                  onClick={() => handleFontSizeChange(size as keyof typeof fontSizes)}
+                >
                   {size}
                 </DropdownMenuItem>
               ))}
@@ -424,6 +436,7 @@ export function RichTextEditor({
 
           <div className="w-px bg-[rgba(55,50,47,0.12)]" />
 
+          {/* Inline formatting */}
           <Button
             variant="outline"
             size="icon"
@@ -478,22 +491,25 @@ export function RichTextEditor({
           >
             <Link2 className="h-4 w-4" />
           </Button>
+
+          {/* Color picker */}
           <label
             className={cn(
               "relative h-9 w-9 cursor-pointer rounded-md border bg-white text-muted-foreground transition hover:bg-muted flex items-center justify-center",
-              analysisActive && "pointer-events-none opacity-50"
+              analysisActive && "pointer-events-none opacity-50",
             )}
           >
             <Palette className="h-4 w-4" />
             <input
               type="color"
               value={fontColor}
-              onChange={(event) => handleColorChange(event.target.value)}
+              onChange={event => handleColorChange(event.target.value)}
               className="absolute inset-0 opacity-0 cursor-pointer"
               disabled={analysisActive}
             />
           </label>
 
+          {/* Undo / Redo */}
           <Button
             variant="outline"
             size="icon"
@@ -514,16 +530,18 @@ export function RichTextEditor({
           </Button>
         </div>
       </CardHeader>
+
       <CardContent className="p-6">
         <div
-          className={`min-h-[500px] p-4 rounded border focus-within:ring-2 ${analysisActive
-              ? 'bg-amber-50 border-amber-200 focus-within:ring-amber-300'
-              : 'bg-white border-[rgba(55,50,47,0.12)] focus-within:ring-[#37322F]/20'
-            }`}
-          onClick={(e) => {
+          className={`min-h-[500px] p-4 rounded border focus-within:ring-2 ${
+            analysisActive
+              ? "bg-amber-50 border-amber-200 focus-within:ring-amber-300"
+              : "bg-white border-[rgba(55,50,47,0.12)] focus-within:ring-[#37322F]/20"
+          }`}
+          onClick={e => {
             const target = e.target as HTMLElement
-            if (target.classList.contains('issue-highlight')) {
-              const issueId = target.getAttribute('data-issue-id')
+            if (target.classList.contains("issue-highlight")) {
+              const issueId = target.getAttribute("data-issue-id")
               if (issueId) {
                 const issue = analysisIssues.find(i => i.id === issueId)
                 if (issue) {

@@ -69,6 +69,64 @@ def _build_context_dict(raw_context: Any, fallback_main_goal: str = "") -> Dict[
         "constraints": [],
     }
 
+@router.post("/analyze")
+def analyze_unified(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Unified endpoint được FE gọi:
+    POST /api/logic-checks/analyze
+
+    Gọi analyze_document() 1 lần và trả về đúng format FE mong muốn.
+    """
+
+    content = payload.get("content") or ""
+    raw_context = payload.get("context") or {}
+    language = payload.get("language") or "vi"
+    mode = payload.get("mode") or "fast"
+
+    context_dict = _build_context_dict(
+        raw_context,
+        fallback_main_goal="Unified logic analysis"
+    )
+
+    try:
+        full_result = analyze_document(
+            context=context_dict,
+            content=content,
+            language=language,
+            mode=mode,
+        )
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+
+        return {
+            "success": False,
+            "content": content,
+            "context": context_dict,
+            "contradictions": {"items": []},
+            "undefined_terms": {"items": []},
+            "unsupported_claims": {"items": []},
+            "logical_jumps": {"items": []},
+            "spelling_errors": {"items": []},
+            "metadata": {"error": str(exc)},
+        }
+
+    # Build unified structure FE expects:
+    return {
+        "success": True,
+        "content": content,
+        "context": context_dict,
+        "contradictions": full_result.get("contradictions") or {"items": []},
+        "undefined_terms": full_result.get("undefined_terms") or {"items": []},
+        "unsupported_claims": full_result.get("unsupported_claims") or {"items": []},
+        "logical_jumps": full_result.get("logical_jumps") or {"items": []},
+        "spelling_errors": full_result.get("spelling_errors") or {"items": []},
+        "summary": full_result.get("summary") or {},
+        "metadata": full_result.get("metadata") or {},
+    }
 
 @router.post("/unsupported-claims", response_model=UnsupportedClaimsResponse)
 def analyze_unsupported_claims(

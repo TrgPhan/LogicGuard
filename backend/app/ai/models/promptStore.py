@@ -577,6 +577,7 @@ def prompt_analysis_vi(context: Dict[str, Any], content: str) -> str:
     3) Luận điểm thiếu chứng cứ
     4) Nhảy logic
     5) Lỗi chính tả (VI + EN trong văn bản)
+    ƯU TIÊN: phát hiện lỗi chính tả TRƯỚC, sau đó mới tới các lỗi logic khác.
     """
 
     writing_type = context.get("writing_type", "Văn bản")
@@ -612,17 +613,16 @@ Bạn nhận được:
 - CONTEXT: thông tin tổng quan về nhiệm vụ viết.
 - CONTENT: toàn bộ văn bản gốc dạng chuỗi.
 
-QUY TẮC CHUNG QUAN TRỌNG:
-- CHỈ trả về MỘT object JSON duy nhất.
-- JSON PHẢI hợp lệ (không dấu phẩy thừa, không comment).
-- KHÔNG dùng markdown, KHÔNG dùng ``` trong output.
-- KHÔNG ghi thêm bất kỳ giải thích nào ngoài JSON.
-- Mọi vị trí (start_pos, end_pos) dùng cho spelling_errors
-  đều là chỉ số ký tự 0-based trên CHUỖI CONTENT GỐC
-  (chính xác như trong block VĂN BẢN bên dưới).
-- end_pos là chỉ số kết thúc dạng exclusive (giống content[start:end] trong Python).
-- KHÔNG coi tên thương hiệu / tên sản phẩm / tên mô hình có vẻ cố ý
-  (ví dụ: "iPhone", "YouTube", "Z-Trax", "NeuroLearn-X") là lỗi chính tả.
+⚠️ QUY TẮC ƯU TIÊN CỰC KỲ QUAN TRỌNG:
+- BƯỚC 1: Đọc toàn bộ văn bản và PHẢI phát hiện lỗi chính tả trước tiên.
+- BƯỚC 2: Sau khi đã xác định xong các lỗi chính tả rõ ràng, bạn mới phân tích 4 nhóm lỗi logic còn lại.
+- Nếu bạn phát hiện ÍT NHẤT 1 lỗi chính tả rõ ràng:
+    + Bạn BẮT BUỘC phải đặt "spelling_errors.total_found" >= 1.
+    + Bạn BẮT BUỘC phải liệt kê đầy đủ các lỗi đó trong "spelling_errors.items".
+    + KHÔNG ĐƯỢC bỏ trống "spelling_errors" nếu trong văn bản có lỗi.
+
+- Nếu bạn gần như chắc chắn (> 70%) một từ/cụm từ là sai chính tả theo NGỮ CẢNH,
+  bạn PHẢI gắn cờ lỗi đó (KHÔNG bỏ qua chỉ vì hơi không chắc).
 
 ------------------------------------------
 ### NGỮ CẢNH
@@ -662,8 +662,10 @@ Bạn PHẢI dùng chính xác chuỗi CONTENT trên để:
   - Có câu giải thích kiểu "X là...", "X được hiểu là...", HOẶC
   - Có giải thích ngắn trong ngoặc đơn, HOẶC
   - Ý nghĩa hiển nhiên với đối tượng độc giả mục tiêu.
-- KHÔNG coi các lỗi chính tả hiển nhiên (deeplearnnig, algoritm, platfomr, tạoo, ...)
-  là "thuật ngữ". Nếu có vẻ chỉ là typo cho một từ phổ biến, hãy bỏ qua trong undefined_terms.
+- KHÔNG coi các lỗi chính tả hiển nhiên (deeplearnnig, algoritm, platfomr, tạoo, ...),
+  hoặc các từ như "cơ thễ", "nghiên cú", "bằng trứng" là "thuật ngữ".
+  Nếu có vẻ chỉ là typo cho một từ phổ biến, hãy bỏ qua trong undefined_terms
+  và để vào spelling_errors.
 - Mỗi item:
   - term: đúng chuỗi trong CONTENT (giữ nguyên chữ hoa, dấu, ...).
   - first_appeared: ví dụ "Đoạn 2, Câu 1".
@@ -708,7 +710,7 @@ total_found PHẢI bằng số lượng items.
   - from_paragraph: số thứ tự đoạn nguồn (bắt đầu từ 1).
   - to_paragraph: số thứ tự đoạn đích (bắt đầu từ 1).
   - from_paragraph_summary: tóm tắt 1–2 câu nội dung đoạn nguồn.
-  - to_paragraph_summary: tóm tắt 1–2 câu nội dung đoạn đích.
+  - to_paragraph_summary: 1–2 câu nội dung đoạn đích.
   - coherence_score: số thực 0–1 (1 = rất mạch lạc, 0 = hầu như không liên quan).
   - flag: nhãn ngắn, ví dụ "abrupt_topic_shift", "missing_explanation".
   - severity: "high" | "medium" | "low".
@@ -720,29 +722,42 @@ total_found PHẢI bằng số lượng items.
 ------------------------------------------
 ### 5) LỖI CHÍNH TẢ (spelling_errors – tiếng Việt + tiếng Anh)
 
-- Phát hiện lỗi chính tả rõ ràng trong cả tiếng Việt và tiếng Anh xuất hiện trong CONTENT.
-- Bao gồm: thiếu chữ, thừa chữ, đảo chữ, gõ nhầm, nhầm dấu trong từ phổ biến.
-- CẦN THẬN TRỌNG:
-  - KHÔNG "sửa" tên thương hiệu, tên riêng, tên mô hình nếu chúng có vẻ cố ý
-    (ví dụ: "iPhone", "YouTube", "NavierGreen", "Z-Trax").
-  - KHÔNG "sửa" các thuật ngữ AI nếu không chắc chắn đó là lỗi (ví dụ: tên model, tên framework).
-  - Nếu không chắc đó có phải lỗi chính tả hay không → BỎ QUA, KHÔNG đánh dấu.
-- Ví dụ các từ NÊN gắn cờ:
-  - "deeplearnnig" → "deep learning"
-  - "databaes" → "database"
-  - "algoritm" → "algorithm"
-  - "platfomr" → "platform"
-  - "tạoo" → "tạo" (trong ngữ cảnh "trí tuệ nhân tạoo")
-- Mỗi item:
-  - original: chuỗi gốc trong CONTENT bị sai chính tả.
-  - suggested: phiên bản chính tả đúng.
-  - start_pos: index ký tự bắt đầu (0-based) trong CONTENT.
-  - end_pos: index ký tự kết thúc dạng exclusive (0-based).
-  - language: "vi" hoặc "en" (ước lượng tốt nhất).
-  - reason: giải thích ngắn vì sao đây là lỗi chính tả.
-- Nếu không có lỗi rõ ràng, đặt total_found = 0 và items = [].
-- total_found PHẢI bằng số lượng items.
+ĐÂY LÀ BƯỚC ƯU TIÊN HÀNG ĐẦU.
 
+- Phát hiện lỗi chính tả rõ ràng trong cả tiếng Việt và tiếng Anh xuất hiện trong CONTENT.
+
+KHI KIỂM TRA TỪ / CỤM TỪ, BẠN PHẢI:
+- Nhìn ít nhất 1–3 từ TRƯỚC và 1–3 từ SAU.
+- Đánh giá cả CỤM có tự nhiên và có nghĩa trong tiếng Việt hay không.
+- Nếu một từ tự nó "có vẻ đúng", nhưng cả cụm trở nên vô nghĩa, hãy coi đó là lỗi chính tả.
+
+Ví dụ (dựa trên NGỮ CẢNH):
+- "cơ thễ" trong câu nói về sức khỏe → phải là "cơ thể".
+- "nghiên cú" trong câu nói về nghiên cứu khoa học → phải là "nghiên cứu".
+- "bằng trứng khoa học" trong ngữ cảnh luận điểm → phải là "bằng chứng khoa học".
+- "nướt tăng lực" trong đoạn nói về nước uống → phải là "nước tăng lực".
+- "kích hoặt năng lượng não bộ" → phải là "kích hoạt năng lượng não bộ".
+- "khả nằng" → "khả năng".
+
+QUY TẮC QUAN TRỌNG:
+- KHÔNG sửa tên thương hiệu, tên riêng, tên sản phẩm/mô hình nếu có vẻ cố ý:
+  ví dụ: "Zindra", "Liora", "Tinh Vân Định Chuẩn", "Tâm Linh Omega".
+- Chỉ sửa nếu cực kỳ rõ là gõ sai (dựa trên ngữ cảnh).
+- Nếu bạn KHÔNG CHẮC tới 70% rằng từ đó sai → BỎ QUA, KHÔNG gắn cờ.
+
+Mỗi item trong spelling_errors:
+- original: chuỗi gốc trong CONTENT bị sai chính tả.
+- suggested: phiên bản chính tả đúng theo NGỮ CẢNH.
+- start_pos: index ký tự bắt đầu (0-based) trong CONTENT.
+- end_pos: index ký tự kết thúc dạng exclusive (0-based).
+- language: "vi" hoặc "en".
+- reason: giải thích ngắn vì sao đây là lỗi chính tả và vì sao cách sửa phù hợp với NGỮ CẢNH.
+
+Nếu không có lỗi rõ ràng:
+- total_found = 0
+- items = [].
+
+total_found PHẢI bằng số lượng items.
 ------------------------------------------
 ### ĐỊNH DẠNG JSON ĐẦU RA (CHUẨN)
 
@@ -758,79 +773,27 @@ Bạn PHẢI trả về JSON với cấu trúc (tên trường y hệt):
     
     "contradictions": {{
         "total_found": <số nguyên>,
-        "items": [
-            {{
-                "id": 1,
-                "sentence1": "Toàn bộ câu thứ nhất",
-                "sentence2": "Toàn bộ câu mâu thuẫn",
-                "sentence1_location": "Đoạn X, Câu Y",
-                "sentence2_location": "Đoạn A, Câu B",
-                "contradiction_type": "factual|numerical|temporal|logical",
-                "severity": "high|medium|low",
-                "explanation": "Giải thích tại sao hai câu mâu thuẫn",
-                "suggestion": "Gợi ý cách chỉnh sửa hoặc làm rõ"
-            }}
-        ]
+        "items": [ ... ]
     }},
     
     "undefined_terms": {{
         "total_found": <số nguyên>,
-        "items": [
-            {{
-                "term": "Tên thuật ngữ",
-                "first_appeared": "Đoạn X, Câu Y",
-                "context_snippet": "Trích đoạn ngắn có chứa thuật ngữ...",
-                "is_defined": false,
-                "reason": "Vì sao xem là chưa được định nghĩa rõ",
-                "suggestion": "Gợi ý cách thêm định nghĩa hoặc giải thích"
-            }}
-        ]
+        "items": [ ... ]
     }},
     
     "unsupported_claims": {{
         "total_found": <số nguyên>,
-        "items": [
-            {{
-                "claim": "Nội dung luận điểm",
-                "location": "Đoạn X, Câu Y",
-                "status": "unsupported",
-                "claim_type": "absolute|comparative|causal|predictive",
-                "reason": "Luận điểm thiếu dữ liệu / ví dụ / trích dẫn trong phạm vi cho phép",
-                "surrounding_context": "Trích bối cảnh xung quanh luận điểm...",
-                "suggestion": "Đề xuất bổ sung chứng cứ hoặc điều chỉnh câu chữ"
-            }}
-        ]
+        "items": [ ... ]
     }},
     
     "logical_jumps": {{
         "total_found": <số nguyên>,
-        "items": [
-            {{
-                "from_paragraph": <số nguyên>,
-                "to_paragraph": <số nguyên>,
-                "from_paragraph_summary": "Tóm tắt ngắn đoạn xuất phát",
-                "to_paragraph_summary": "Tóm tắt ngắn đoạn đích",
-                "coherence_score": <số thực>,
-                "flag": "logical_jump",
-                "severity": "high|medium|low",
-                "explanation": "Giải thích vì sao bị xem là nhảy logic",
-                "suggestion": "Gợi ý cách thêm câu chuyển ý, sắp xếp lại, hoặc liên kết chủ đề"
-            }}
-        ]
+        "items": [ ... ]
     }},
     
     "spelling_errors": {{
         "total_found": <số nguyên>,
-        "items": [
-            {{
-                "original": "deeplearnnig",
-                "suggested": "deep learning",
-                "start_pos": 120,
-                "end_pos": 132,
-                "language": "en",
-                "reason": "Thuật ngữ tiếng Anh phổ biến nhưng bị gõ sai thứ tự chữ cái"
-            }}
-        ]
+        "items": [ ... ]
     }},
     
     "summary": {{

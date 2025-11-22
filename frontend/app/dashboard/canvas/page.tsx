@@ -19,6 +19,28 @@ interface ContextDataPayload {
   goal: GoalDetailResponse
 }
 
+// Item trả về từ backend unified /logic-checks/undefined-terms
+interface LogicIssueItem {
+  id?: string
+  type?: AnalysisIssue["type"] | string
+  text?: string
+  term?: string
+  reason?: string
+  suggestion?: string
+  start_pos?: number
+  end_pos?: number
+}
+
+interface LogicAnalysisAPIResponse {
+  success?: boolean
+  content?: string
+  context?: any
+  total_terms_found?: number
+  total_undefined?: number
+  metadata?: Record<string, any>
+  items?: LogicIssueItem[]
+}
+
 export default function CanvasPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -37,52 +59,13 @@ export default function CanvasPage() {
   const [appliedSuggestions, setAppliedSuggestions] = useState<string[]>([])
   const initialContentRef = useRef<string>("")
 
-  const docId = searchParams.get("docId") || selectedDocumentId
-
-  // Mock analysis issues - Replace with actual API call
-  const mockAnalysisIssues: AnalysisIssue[] = [
-    {
-      id: "1",
-      type: "logic_contradiction",
-      startPos: 0,
-      endPos: 0,
-      message: "This statement contradicts the previous argument",
-      suggestion: "the system has identified consistent points",
-      text: "identified key points",
-    },
-    {
-      id: "2",
-      type: "weak_evidence",
-      startPos: 0,
-      endPos: 0,
-      message: "This claim needs stronger supporting evidence",
-      suggestion: "climate change presents interconnected challenges that require evidence-based solutions",
-      text: "multifaceted impacts",
-    },
-    {
-      id: "3",
-      type: "clarity_issue",
-      startPos: 0,
-      endPos: 0,
-      message: "This phrase could be more concise and clearer",
-      suggestion: "demonstrates real-world business applications",
-      text: "practical application of theoretical frameworks in a real-world business scenario",
-    },
-    {
-      id: "4",
-      type: "logic_gap",
-      startPos: 0,
-      endPos: 0,
-      message: "Missing connection between premise and conclusion",
-      suggestion: "synthesizes and evaluates recent research findings",
-      text: "synthesizes recent research findings",
-    },
-  ]
+  const docId = searchParams?.get("docId") ?? selectedDocumentId ?? null
 
   useEffect(() => {
     if (docId) {
-      fetchDocument(docId)
+      void fetchDocument(docId)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId])
 
   // Track unsaved changes
@@ -112,7 +95,7 @@ export default function CanvasPage() {
   const handleNavigation = (path: string) => {
     if (hasUnsavedChanges) {
       const confirmed = window.confirm(
-        "Bạn có thay đổi chưa được lưu. Bạn có chắc muốn rời đi mà không lưu không?"
+        "Bạn có thay đổi chưa được lưu. Bạn có chắc muốn rời đi mà không lưu không?",
       )
       if (!confirmed) return
     }
@@ -128,8 +111,8 @@ export default function CanvasPage() {
       const content = doc.content_full || ""
       setCurrentDoc({
         title: doc.title,
-        content: content,
-        goalId: doc.goal_id
+        content,
+        goalId: doc.goal_id,
       })
       setEditorContent(content)
       initialContentRef.current = content
@@ -138,14 +121,15 @@ export default function CanvasPage() {
       if (doc.goal_id) {
         await loadGoal(doc.goal_id)
       }
-    } catch (err: any) {
-      setError(err.message || "Failed to load document")
+    } catch (err: unknown) {
+      const e = err as Error
+      setError(e.message || "Failed to load document")
       if (selectedDocument) {
         const content = selectedDocument.content || ""
         setCurrentDoc({
           title: selectedDocument.title,
-          content: content,
-          goalId: undefined
+          content,
+          goalId: undefined,
         })
         setEditorContent(content)
         initialContentRef.current = content
@@ -159,8 +143,9 @@ export default function CanvasPage() {
     try {
       const goalData = await EnhancedGoalsAPI.getById(goalId)
       setCurrentGoal(goalData)
-    } catch (err: any) {
-      setError(err.message || "Failed to load goal data")
+    } catch (err: unknown) {
+      const e = err as Error
+      setError(e.message || "Failed to load goal data")
     }
   }
 
@@ -180,8 +165,9 @@ export default function CanvasPage() {
       setHasUnsavedChanges(false)
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 2000)
-    } catch (err: any) {
-      setError(err.message || "Failed to save document")
+    } catch (err: unknown) {
+      const e = err as Error
+      setError(e.message || "Failed to save document")
     } finally {
       setIsSaving(false)
     }
@@ -190,9 +176,9 @@ export default function CanvasPage() {
   const handleExport = () => {
     if (!currentDoc) return
 
-    const blob = new Blob([editorContent], { type: 'text/html' })
+    const blob = new Blob([editorContent], { type: "text/html" })
     const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
+    const link = document.createElement("a")
     link.href = url
     link.download = `${currentDoc.title}.html`
     document.body.appendChild(link)
@@ -210,36 +196,140 @@ export default function CanvasPage() {
           goal_id: contextData.goal.id,
         })
 
-        setCurrentDoc((prev) => (prev ? { ...prev, goalId: contextData.goal.id } : prev))
+        setCurrentDoc(prev => (prev ? { ...prev, goalId: contextData.goal.id } : prev))
       }
 
       setCurrentGoal(contextData.goal)
-    } catch (err: any) {
-      setError(err.message || "Failed to link goal to document")
+    } catch (err: unknown) {
+      const e = err as Error
+      setError(e.message || "Failed to link goal to document")
     }
   }
 
-  const handleAnalyze = () => {
-    if (!analysisActive) {
-      // Enable analysis mode and show mock issues
-      setAnalysisIssues(mockAnalysisIssues)
-      setAnalysisActive(true)
-    } else {
-      // Disable analysis mode and clear issues
+  const handleAnalyze = async () => {
+    // Nếu đang bật thì tắt phân tích, clear issues
+    if (analysisActive) {
       setAnalysisIssues([])
       setAnalysisActive(false)
       setAppliedSuggestions([])
+      return
+    }
+
+    // Bật chế độ phân tích
+    setAnalysisActive(true)
+    setError(null)
+
+    try {
+      // Lấy content hiện tại trong editor
+      const content = editorContent || currentDoc?.content || ""
+
+      if (!content.trim()) {
+        setError("Không có nội dung để phân tích")
+        setAnalysisIssues([])
+        setAnalysisActive(false)
+        return
+      }
+
+      // Lấy token giống cách login đang dùng
+      let token: string | null = null
+
+      if (typeof window !== "undefined") {
+        token =
+          localStorage.getItem("access_token") ||
+          localStorage.getItem("accessToken") ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("access_token") ||
+          sessionStorage.getItem("accessToken") ||
+          sessionStorage.getItem("token")
+
+        console.log("[Canvas] token found?", !!token)
+      }
+
+      if (!token) {
+        setError("Bạn chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.")
+        setAnalysisIssues([])
+        setAnalysisActive(false)
+        return
+      }
+
+      // Context đơn giản; sau này có thể dùng currentGoal để enrich thêm
+      const mainGoalTitle = currentGoal
+        ? "Analyze document for current goal"
+        : "Analyze document for logical issues"
+
+      const contextPayload = {
+        writing_type: "Document",
+        main_goal: mainGoalTitle,
+        criteria: [],
+        constraints: [],
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+
+      const res = await fetch(`${baseUrl}/api/logic-checks/undefined-terms`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          context: contextPayload,
+          content,
+        }),
+      })
+
+      if (res.status === 401 || res.status === 403) {
+        const text = await res.text()
+        console.error("[Canvas] Unauthorized/Forbidden:", res.status, text)
+        setError("Bạn chưa đăng nhập hoặc không có quyền sử dụng tính năng phân tích.")
+        setAnalysisIssues([])
+        setAnalysisActive(false)
+        return
+      }
+
+      if (!res.ok) {
+        const text = await res.text()
+        console.error("[Canvas] Analysis API error:", res.status, text)
+        setError("Phân tích thất bại từ server")
+        setAnalysisIssues([])
+        setAnalysisActive(false)
+        return
+      }
+
+      const data: LogicAnalysisAPIResponse = await res.json()
+      const items: LogicIssueItem[] = data.items ?? []
+
+      const mapped: AnalysisIssue[] = items.map((item, index) => ({
+        id: item.id ?? String(index + 1),
+        type: (item.type as AnalysisIssue["type"]) || "clarity_issue",
+        startPos: item.start_pos ?? 0,
+        endPos: item.end_pos ?? 0,
+        text: item.text || item.term || "",
+        message: item.reason || "",
+        suggestion: item.suggestion || "",
+      }))
+
+      console.log("[Canvas] mapped issues:", mapped.length)
+      setAnalysisIssues(mapped)
+    } catch (err: unknown) {
+      console.error("[Canvas] Analysis failed:", err)
+      if (err instanceof Error) {
+        setError(err.message || "Phân tích thất bại")
+      } else {
+        setError("Phân tích thất bại")
+      }
+      setAnalysisIssues([])
+      setAnalysisActive(false)
     }
   }
 
   const handleSuggestionClick = (issue: AnalysisIssue) => {
-    // Remove the issue from the list when clicked
     setAnalysisIssues(analysisIssues.filter(i => i.id !== issue.id))
     setAppliedSuggestions([...appliedSuggestions, issue.id])
   }
 
   const handleSuggestionAccept = (issueId: string) => {
-    // Called after suggestion is applied in editor
     console.log("[Canvas] Suggestion accepted:", issueId)
   }
 
@@ -302,15 +392,14 @@ export default function CanvasPage() {
           </Button>
           <Button
             onClick={handleAnalyze}
-            className={`gap-2 ${analysisActive ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#37322F] hover:bg-[#37322F]/90'}`}
+            className={`gap-2 ${
+              analysisActive ? "bg-blue-600 hover:bg-blue-700" : "bg-[#37322F] hover:bg-[#37322F]/90"
+            }`}
           >
             <Sparkles className="h-4 w-4" />
-            {analysisActive ? 'Analysis Active' : 'Analyze'}
+            {analysisActive ? "Analysis Active" : "Analyze"}
           </Button>
-          <Button
-            className="gap-2 bg-[#37322F] hover:bg-[#37322F]/90"
-            onClick={handleExport}
-          >
+          <Button className="gap-2 bg-[#37322F] hover:bg-[#37322F]/90" onClick={handleExport}>
             <Download className="h-4 w-4" />
             Export
           </Button>
@@ -330,10 +419,7 @@ export default function CanvasPage() {
 
         <div className="space-y-4">
           {analysisActive && analysisIssues.length > 0 ? (
-            <AnalysisIssuesOverlay
-              issues={analysisIssues}
-              onSuggestionClick={handleSuggestionClick}
-            />
+            <AnalysisIssuesOverlay issues={analysisIssues} onSuggestionClick={handleSuggestionClick} />
           ) : (
             <>
               <Card className="border-[rgba(55,50,47,0.12)]">
@@ -344,19 +430,27 @@ export default function CanvasPage() {
                   <div className="text-sm space-y-2">
                     <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
                       <input type="radio" id="essay" name="writing-type" defaultChecked className="h-4 w-4" />
-                      <label htmlFor="essay" className="text-[#37322F] cursor-pointer">Essay</label>
+                      <label htmlFor="essay" className="text-[#37322F] cursor-pointer">
+                        Essay
+                      </label>
                     </div>
                     <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
                       <input type="radio" id="research" name="writing-type" className="h-4 w-4" />
-                      <label htmlFor="research" className="text-[#37322F] cursor-pointer">Research Paper</label>
+                      <label htmlFor="research" className="text-[#37322F] cursor-pointer">
+                        Research Paper
+                      </label>
                     </div>
                     <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
                       <input type="radio" id="proposal" name="writing-type" className="h-4 w-4" />
-                      <label htmlFor="proposal" className="text-[#37322F] cursor-pointer">Business Proposal</label>
+                      <label htmlFor="proposal" className="text-[#37322F] cursor-pointer">
+                        Business Proposal
+                      </label>
                     </div>
                     <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
                       <input type="radio" id="review" name="writing-type" className="h-4 w-4" />
-                      <label htmlFor="review" className="text-[#37322F] cursor-pointer">Literature Review</label>
+                      <label htmlFor="review" className="text-[#37322F] cursor-pointer">
+                        Literature Review
+                      </label>
                     </div>
                   </div>
                 </CardContent>

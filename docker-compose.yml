@@ -31,6 +31,8 @@ services:
     environment:
       DATABASE_URL: postgresql://app:app@db:5432/logicguard
       FRONTEND_URL: http://localhost:3000
+    volumes:
+      - ./backend:/app   # mount code backend vào container
     ports:
       - "8000:8000"
 
