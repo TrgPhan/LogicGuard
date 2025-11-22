@@ -7,7 +7,7 @@ set -e
 echo "LogicGuard Deployment Starting..."
 
 # Get server IP
-SERVER_IP=$(hostname -I | awk '{print $1}')
+SERVER_IP=$(curl ifconfig.me| awk '{print $1}')
 echo " Detected Server IP: $SERVER_IP"
 
 # Ask for confirmation
