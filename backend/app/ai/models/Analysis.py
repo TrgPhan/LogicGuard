@@ -46,6 +46,7 @@ if not GEMINI_API_KEY:
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Define response schema to enforce JSON structure
+# Updated to match simplified format in promptStore.py
 RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -57,102 +58,56 @@ RESPONSE_SCHEMA = {
                 "total_paragraphs": {"type": "integer"},
                 "total_sentences": {"type": "integer"}
             },
-            "required": ["analyzed_at", "writing_type", "total_paragraphs", "total_sentences"]
+            "required": []
         },
         "contradictions": {
-            "type": "object",
-            "properties": {
-                "total_found": {"type": "integer"},
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "id": {"type": "integer"},
-                            "sentence1": {"type": "string"},
-                            "sentence2": {"type": "string"},
-                            "sentence1_location": {"type": "string"},
-                            "sentence2_location": {"type": "string"},
-                            "contradiction_type": {"type": "string"},
-                            "severity": {"type": "string"},
-                            "explanation": {"type": "string"},
-                            "suggestion": {"type": "string"}
-                        },
-                        "required": ["sentence1", "sentence2", "explanation"]
-                    }
-                }
-            },
-            "required": ["total_found", "items"]
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "original_text": {"type": "string"},
+                    "suggested_text": {"type": "string"},
+                    "replacement_type": {"type": "string"}
+                },
+                "required": ["original_text", "suggested_text", "replacement_type"]
+            }
         },
         "undefined_terms": {
-            "type": "object",
-            "properties": {
-                "total_found": {"type": "integer"},
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "term": {"type": "string"},
-                            "first_appeared": {"type": "string"},
-                            "context_snippet": {"type": "string"},
-                            "is_defined": {"type": "boolean"},
-                            "reason": {"type": "string"},
-                            "suggestion": {"type": "string"}
-                        },
-                        "required": ["term", "reason"]
-                    }
-                }
-            },
-            "required": ["total_found", "items"]
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "term": {"type": "string"},
+                    "original_text": {"type": "string"},
+                    "suggested_text": {"type": "string"},
+                    "replacement_type": {"type": "string"}
+                },
+                "required": ["term", "original_text", "suggested_text", "replacement_type"]
+            }
         },
         "unsupported_claims": {
-            "type": "object",
-            "properties": {
-                "total_found": {"type": "integer"},
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "claim": {"type": "string"},
-                            "location": {"type": "string"},
-                            "status": {"type": "string"},
-                            "claim_type": {"type": "string"},
-                            "reason": {"type": "string"},
-                            "surrounding_context": {"type": "string"},
-                            "suggestion": {"type": "string"}
-                        },
-                        "required": ["claim", "reason"]
-                    }
-                }
-            },
-            "required": ["total_found", "items"]
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "original_text": {"type": "string"},
+                    "suggested_text": {"type": "string"},
+                    "replacement_type": {"type": "string"}
+                },
+                "required": ["original_text", "suggested_text", "replacement_type"]
+            }
         },
         "logical_jumps": {
-            "type": "object",
-            "properties": {
-                "total_found": {"type": "integer"},
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "from_paragraph": {"type": "integer"},
-                            "to_paragraph": {"type": "integer"},
-                            "from_paragraph_summary": {"type": "string"},
-                            "to_paragraph_summary": {"type": "string"},
-                            "coherence_score": {"type": "number"},
-                            "flag": {"type": "string"},
-                            "severity": {"type": "string"},
-                            "explanation": {"type": "string"},
-                            "suggestion": {"type": "string"}
-                        },
-                        "required": ["from_paragraph", "to_paragraph", "coherence_score", "explanation"]
-                    }
-                }
-            },
-            "required": ["total_found", "items"]
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string"},
+                    "suggested_text": {"type": "string"},
+                    "replacement_type": {"type": "string"}
+                },
+                "required": ["location", "suggested_text", "replacement_type"]
+            }
         },
         "summary": {
             "type": "object",
@@ -165,10 +120,10 @@ RESPONSE_SCHEMA = {
                     "items": {"type": "string"}
                 }
             },
-            "required": ["total_issues", "critical_issues", "document_quality_score", "key_recommendations"]
+            "required": []
         }
     },
-    "required": ["analysis_metadata", "contradictions", "undefined_terms", "unsupported_claims", "logical_jumps", "summary"]
+    "required": ["contradictions", "undefined_terms", "unsupported_claims", "logical_jumps"]
 }
 
 
@@ -287,6 +242,13 @@ def analyze_document(context: Dict[str, Any], content: str, language: str = "en"
             prompt = prompt_analysis(context, content)
             print("Using English prompt...")
         
+        # Validate prompt is not empty
+        if not prompt or not prompt.strip():
+            error_msg = "Generated prompt is empty"
+            print(f"❌ {error_msg}")
+            result["metadata"]["error"] = error_msg
+            return result
+        
         # Store language in metadata
         result["analysis_metadata"]["language"] = language
         
@@ -337,29 +299,44 @@ def analyze_document(context: Dict[str, Any], content: str, language: str = "en"
         if "analysis_metadata" in llm_result:
             result["analysis_metadata"].update(llm_result["analysis_metadata"])
         
-        # Extract contradictions
+        # Helper function to normalize format (new format is arrays, old format has items wrapper)
+        def normalize_issue_format(issues_data, default_items_key="items"):
+            """Convert new format (array) to old format (dict with items and total_found)"""
+            if isinstance(issues_data, list):
+                # New format: direct array
+                return {
+                    "total_found": len(issues_data),
+                    "items": issues_data
+                }
+            elif isinstance(issues_data, dict):
+                # Old format: already has structure
+                if "items" in issues_data:
+                    if "total_found" not in issues_data:
+                        issues_data["total_found"] = len(issues_data.get("items", []))
+                    return issues_data
+                elif default_items_key in issues_data:
+                    # Alternative key name
+                    return {
+                        "total_found": len(issues_data.get(default_items_key, [])),
+                        "items": issues_data.get(default_items_key, [])
+                    }
+            return {"total_found": 0, "items": []}
+        
+        # Extract contradictions (new format: array, old format: dict with items)
         if "contradictions" in llm_result:
-            result["contradictions"] = llm_result["contradictions"]
-            if "total_found" not in result["contradictions"]:
-                result["contradictions"]["total_found"] = len(result["contradictions"].get("items", []))
+            result["contradictions"] = normalize_issue_format(llm_result["contradictions"])
         
         # Extract undefined terms
         if "undefined_terms" in llm_result:
-            result["undefined_terms"] = llm_result["undefined_terms"]
-            if "total_found" not in result["undefined_terms"]:
-                result["undefined_terms"]["total_found"] = len(result["undefined_terms"].get("items", []))
+            result["undefined_terms"] = normalize_issue_format(llm_result["undefined_terms"])
         
         # Extract unsupported claims
         if "unsupported_claims" in llm_result:
-            result["unsupported_claims"] = llm_result["unsupported_claims"]
-            if "total_found" not in result["unsupported_claims"]:
-                result["unsupported_claims"]["total_found"] = len(result["unsupported_claims"].get("items", []))
+            result["unsupported_claims"] = normalize_issue_format(llm_result["unsupported_claims"])
         
         # Extract logical jumps
         if "logical_jumps" in llm_result:
-            result["logical_jumps"] = llm_result["logical_jumps"]
-            if "total_found" not in result["logical_jumps"]:
-                result["logical_jumps"]["total_found"] = len(result["logical_jumps"].get("items", []))
+            result["logical_jumps"] = normalize_issue_format(llm_result["logical_jumps"])
         
         # Extract summary
         if "summary" in llm_result:
@@ -423,28 +400,32 @@ def get_analysis_summary(analysis_result: Dict[str, Any]) -> str:
     lines.append(f"\n🔴 CONTRADICTIONS: {contra.get('total_found', 0)} found")
     if contra.get("items"):
         for item in contra["items"][:3]:
-            lines.append(f"  - {item.get('sentence1', '')[:60]}... ↔ {item.get('sentence2', '')[:60]}...")
+            original = item.get('original_text', item.get('sentence1', 'N/A'))
+            lines.append(f"  - {original[:70]}...")
     
     # Undefined Terms
     terms = analysis_result.get("undefined_terms", {})
     lines.append(f"\n📚 UNDEFINED TERMS: {terms.get('total_found', 0)} found")
     if terms.get("items"):
         for item in terms["items"][:5]:
-            lines.append(f"  - {item.get('term', 'N/A')}")
+            term = item.get('term', 'N/A')
+            lines.append(f"  - {term}")
     
     # Unsupported Claims
     claims = analysis_result.get("unsupported_claims", {})
     lines.append(f"\n⚠️  UNSUPPORTED CLAIMS: {claims.get('total_found', 0)} found")
     if claims.get("items"):
         for item in claims["items"][:3]:
-            lines.append(f"  - {item.get('claim', 'N/A')[:70]}...")
+            original = item.get('original_text', item.get('claim', 'N/A'))
+            lines.append(f"  - {original[:70]}...")
     
     # Logical Jumps
     jumps = analysis_result.get("logical_jumps", {})
     lines.append(f"\n🔀 LOGICAL JUMPS: {jumps.get('total_found', 0)} found")
     if jumps.get("items"):
         for item in jumps["items"]:
-            lines.append(f"  - Paragraph {item.get('from_paragraph', '?')} → {item.get('to_paragraph', '?')} (coherence: {item.get('coherence_score', 0)})")
+            location = item.get('location', f"Paragraph {item.get('from_paragraph', '?')} → {item.get('to_paragraph', '?')}")
+            lines.append(f"  - {location}")
     
     # Key Recommendations
     if summary.get("key_recommendations"):

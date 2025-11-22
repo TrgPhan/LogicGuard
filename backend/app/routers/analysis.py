@@ -73,75 +73,76 @@ def _map_ai_result_to_logic_errors(
     """Map AI analysis results to LogicError database records"""
     errors = []
     
-    # Map contradictions
+    # Map contradictions (new format: original_text, suggested_text, replacement_type)
     contradictions = ai_result.get("contradictions", {}).get("items", [])
     for item in contradictions:
         error = LogicError(
             analysis_run_id=analysis_run.id,
             document_id=document.id,
-            error_type=ErrorType.CONTRADICTION.value,  # Use .value to get "contradiction" string
-            error_category=ErrorCategory.LOGIC.value,  # Use .value to get "logic" string
-            severity=Severity.CRITICAL.value,  # Use .value to get "critical" string
-            message=item.get("explanation", item.get("message", "Contradiction found")),
+            error_type=ErrorType.CONTRADICTION.value,
+            error_category=ErrorCategory.LOGIC.value,
+            severity=Severity.CRITICAL.value,
+            message="Contradiction found in document",
             meta={
-                "text": item.get("text", ""),
-                "contradicts_with": item.get("contradicts_with", ""),
-                "suggestion": item.get("suggestion", "")
+                "text": item.get("original_text", ""),
+                "suggestion": item.get("suggested_text", ""),
+                "replacement_type": item.get("replacement_type", "resolve_contradiction")
             }
         )
         errors.append(error)
     
-    # Map undefined terms
+    # Map undefined terms (new format: term, original_text, suggested_text, replacement_type)
     undefined_terms = ai_result.get("undefined_terms", {}).get("items", [])
     for item in undefined_terms:
         error = LogicError(
             analysis_run_id=analysis_run.id,
             document_id=document.id,
-            error_type=ErrorType.UNDEFINED_TECHNICAL_TERM.value,  # Use .value
-            error_category=ErrorCategory.CLARITY.value,  # Use .value
-            severity=Severity.MEDIUM.value,  # Use .value
-            message=item.get("explanation", item.get("message", "Undefined term found")),
+            error_type=ErrorType.UNDEFINED_TECHNICAL_TERM.value,
+            error_category=ErrorCategory.CLARITY.value,
+            severity=Severity.MEDIUM.value,
+            message=f"Undefined term: {item.get('term', 'N/A')}",
             meta={
                 "term": item.get("term", ""),
-                "context": item.get("context", ""),
-                "suggestion": item.get("suggestion", "")
+                "text": item.get("original_text", ""),
+                "suggestion": item.get("suggested_text", ""),
+                "replacement_type": item.get("replacement_type", "inline_definition")
             }
         )
         errors.append(error)
     
-    # Map unsupported claims
+    # Map unsupported claims (new format: original_text, suggested_text, replacement_type)
     unsupported_claims = ai_result.get("unsupported_claims", {}).get("items", [])
     for item in unsupported_claims:
         error = LogicError(
             analysis_run_id=analysis_run.id,
             document_id=document.id,
-            error_type=ErrorType.UNSUPPORTED_CLAIM.value,  # Use .value to get "unsupported_claim" string
-            error_category=ErrorCategory.LOGIC.value,  # Use .value
-            severity=Severity.MEDIUM.value,  # Use .value
-            message=item.get("explanation", item.get("message", "Unsupported claim found")),
+            error_type=ErrorType.UNSUPPORTED_CLAIM.value,
+            error_category=ErrorCategory.LOGIC.value,
+            severity=Severity.MEDIUM.value,
+            message="Unsupported claim found",
             meta={
-                "claim": item.get("claim", ""),
-                "evidence_quality": item.get("evidence_quality", ""),
-                "suggestion": item.get("suggestion", "")
+                "claim": item.get("original_text", ""),
+                "text": item.get("original_text", ""),
+                "suggestion": item.get("suggested_text", ""),
+                "replacement_type": item.get("replacement_type", "add_evidence")
             }
         )
         errors.append(error)
     
-    # Map logical jumps
+    # Map logical jumps (new format: location, suggested_text, replacement_type)
     logical_jumps = ai_result.get("logical_jumps", {}).get("items", [])
     for item in logical_jumps:
         error = LogicError(
             analysis_run_id=analysis_run.id,
             document_id=document.id,
-            error_type=ErrorType.LOGIC_GAP.value,  # Use .value
-            error_category=ErrorCategory.LOGIC.value,  # Use .value
-            severity=Severity.MEDIUM.value,  # Use .value
-            message=item.get("explanation", item.get("message", "Logical jump found")),
+            error_type=ErrorType.LOGIC_GAP.value,
+            error_category=ErrorCategory.LOGIC.value,
+            severity=Severity.MEDIUM.value,
+            message=f"Logical jump found at {item.get('location', 'unknown location')}",
             meta={
-                "from": item.get("from", ""),
-                "to": item.get("to", ""),
-                "missing_step": item.get("missing_step", ""),
-                "suggestion": item.get("suggestion", "")
+                "location": item.get("location", ""),
+                "suggestion": item.get("suggested_text", ""),
+                "replacement_type": item.get("replacement_type", "add_transition")
             }
         )
         errors.append(error)
