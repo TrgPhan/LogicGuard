@@ -11,6 +11,7 @@ import { ContextSetup } from "@/components/context-setup"
 import { AnalysisIssuesOverlay } from "@/components/analysis-issues-overlay"
 import { DocumentsAPI, EnhancedGoalsAPI } from "@/lib/api-service"
 import type { GoalDetailResponse } from "@/lib/api-service"
+import { getApiBaseUrlWithoutSuffix } from "@/lib/api-config"
 
 interface ContextDataPayload {
   writingType: string
@@ -264,7 +265,7 @@ export default function CanvasPage() {
         constraints: [],
       }
 
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+      const baseUrl = getApiBaseUrlWithoutSuffix()
 
       const res = await fetch(`${baseUrl}/api/logic-checks/undefined-terms`, {
         method: "POST",

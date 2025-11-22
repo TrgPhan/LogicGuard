@@ -13,8 +13,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
-    # CORS
+    # CORS - Support multiple origins for flexible deployment
     FRONTEND_URL: str = "http://localhost:3000"
+    # Comma-separated list of allowed origins (optional, defaults to FRONTEND_URL + localhost)
+    ALLOWED_ORIGINS: str | None = None
     
     # AI/LLM
     GEMINI_API_KEY: str

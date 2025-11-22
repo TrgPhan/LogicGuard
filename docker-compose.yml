@@ -30,7 +30,6 @@ services:
       - ./backend/.env
     environment:
       DATABASE_URL: postgresql://app:app@db:5432/logicguard
-      FRONTEND_URL: http://localhost:3000
     volumes:
       - ./backend:/app   # mount code backend vào container
     ports:
@@ -44,7 +43,10 @@ services:
     depends_on:
       - backend
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      # NEXT_PUBLIC_API_URL will be auto-detected if not set
+      # For production, uncomment and set to your server IP/domain
+      # NEXT_PUBLIC_API_URL: http://192.168.1.43:8000/api
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     ports:
       - "3000:3000"
 

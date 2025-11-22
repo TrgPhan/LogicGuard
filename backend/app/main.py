@@ -20,11 +20,35 @@ from app.routers import (
 
 settings = get_settings()
 
+# Configure CORS origins dynamically
+def get_allowed_origins():
+    """Get list of allowed CORS origins from settings"""
+    origins = [settings.FRONTEND_URL]
+    
+    # Add custom origins if specified
+    if settings.ALLOWED_ORIGINS:
+        custom_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",")]
+        origins.extend(custom_origins)
+    
+    # Always allow localhost for development
+    localhost_variants = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
+    for variant in localhost_variants:
+        if variant not in origins:
+            origins.append(variant)
+    
+    return origins
 
-# 🚀 Lifespan event handler (thay cho on_event startup)
+
+# Lifespan event handler (thay cho on_event startup)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("📌 Creating tables on startup...")
+    print(f"🌐 Allowed CORS origins: {get_allowed_origins()}")
     Base.metadata.create_all(bind=engine)
     yield
     print("🧹 Shutdown complete.")
@@ -38,10 +62,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# CORS with dynamic origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:3000"],
+    allow_origins=get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
