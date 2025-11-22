@@ -5,6 +5,7 @@ from sqlalchemy.orm import relationship
 import enum
 import uuid
 from app.core.database import Base
+from app.utils.enum_types import EnumValueType
 
 
 class AnalysisType(str, enum.Enum):
@@ -26,10 +27,11 @@ class AnalysisRun(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id = Column(UUID(as_uuid=True), ForeignKey("DOCUMENT.id", ondelete="CASCADE"), nullable=False)
     doc_version = Column(Integer, nullable=False)
-    analysis_type = Column(SQLEnum(AnalysisType, name="ANALYSIS_TYPE"), nullable=False, default=AnalysisType.INCREMENTAL)
+    # Use custom EnumValueType to ensure enum values (not names) are stored in database
+    analysis_type = Column(EnumValueType(AnalysisType), nullable=False, default=AnalysisType.INCREMENTAL.value)
     trigger_source = Column(Text, nullable=False)
     paragraphs_analyzed = Column(JSONB, nullable=False, server_default='[]')
-    status = Column(SQLEnum(AnalysisStatus, name="ANALYSIS_STATUS"), nullable=False, default=AnalysisStatus.QUEUED)
+    status = Column(EnumValueType(AnalysisStatus), nullable=False, default=AnalysisStatus.QUEUED.value)
     stats = Column(JSONB, nullable=False, server_default='{}')
     error_message = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

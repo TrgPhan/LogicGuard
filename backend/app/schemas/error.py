@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
 
@@ -10,8 +10,9 @@ class LogicErrorResponse(BaseModel):
     error_category: str
     severity: str
     message: str
-    p_index: Optional[int]
-    s_index: Optional[int]
+    meta: Optional[Dict[str, Any]] = None
+    p_index: Optional[int] = None
+    s_index: Optional[int] = None
     is_resolved: bool
     created_at: datetime
 

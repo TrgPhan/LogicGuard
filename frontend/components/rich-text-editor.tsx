@@ -1,5 +1,6 @@
 "use client"
 
+import "@/styles/editor-override.css"
 import { useEditor, EditorContent } from "@tiptap/react"
 import type { ChainedCommands } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
@@ -11,6 +12,74 @@ import FontFamily from "@tiptap/extension-font-family"
 import Link from "@tiptap/extension-link"
 import TaskList from "@tiptap/extension-task-list"
 import TaskItem from "@tiptap/extension-task-item"
+import { Extension } from "@tiptap/core"
+
+// Custom FontSize extension
+const FontSize = Extension.create({
+  name: "fontSize",
+
+  addOptions() {
+    return {
+      types: ["textStyle"],
+    }
+  },
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types,
+        attributes: {
+          fontSize: {
+            default: null,
+            parseHTML: (element) => element.style.fontSize || null,
+            renderHTML: (attributes) => {
+              if (!attributes.fontSize) {
+                return {}
+              }
+              return {
+                style: `font-size: ${attributes.fontSize} !important`,
+              }
+            },
+          },
+        },
+      },
+    ]
+  },
+})
+
+// Custom extension to preserve suggestion highlight spans
+const SuggestionHighlight = Extension.create({
+  name: "suggestionHighlight",
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["textStyle"],
+        attributes: {
+          suggestionHighlight: {
+            default: null,
+            parseHTML: (element) => {
+              // Check if element has suggestion-applied or suggestion-applying class
+              if (element.classList.contains('suggestion-applied') || element.classList.contains('suggestion-applying')) {
+                return element.getAttribute('class') || null
+              }
+              return null
+            },
+            renderHTML: (attributes) => {
+              if (!attributes.suggestionHighlight) {
+                return {}
+              }
+              // Preserve the original HTML structure
+              return {
+                class: attributes.suggestionHighlight,
+              }
+            },
+          },
+        },
+      },
+    ]
+  },
+})
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -34,7 +103,7 @@ import {
   Minus
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +120,7 @@ interface RichTextEditorProps {
   analysisActive?: boolean
   analysisIssues?: AnalysisIssue[]
   onSuggestionAccept?: (issueId: string) => void
+  onIssueClick?: (handleIssueClick: (issue: AnalysisIssue) => void) => void
 }
 
 export interface AnalysisIssue {
@@ -75,7 +145,8 @@ export function RichTextEditor({
   initialContent,
   analysisActive = false,
   analysisIssues = [],
-  onSuggestionAccept
+  onSuggestionAccept,
+  onIssueClick
 }: RichTextEditorProps) {
   const [replacedWords, setReplacedWords] = useState<Set<string>>(new Set())
   const [selectedBlock, setSelectedBlock] = useState("Text")
@@ -97,14 +168,24 @@ export function RichTextEditor({
       FontFamily.configure({ types: ["textStyle"] }),
       Link.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
       TaskList.configure({ HTMLAttributes: { class: "not-prose" } }),
-      TaskItem.configure({ nested: true })
+      TaskItem.configure({ nested: true }),
+      FontSize
     ],
-    content: initialContent || "<p>Start typing your content here...</p>",
+    content: initialContent || "",
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
       onContentChange?.(editor.getHTML())
     },
     editable: !analysisActive,
+    editorProps: {
+      attributes: {
+        class: 'prose-editor',
+        'data-placeholder': 'Start typing your content here...'
+      },
+      transformPastedHTML(html) {
+        return html
+      },
+    }
   })
 
   const fontSizes: Record<string, string> = {
@@ -116,6 +197,40 @@ export function RichTextEditor({
   }
 
   type FontSizeLabel = keyof typeof fontSizes
+
+  // Remove green highlights when analysis is turned off
+  useEffect(() => {
+    if (!editor) return
+    
+    if (!analysisActive) {
+      // Remove all suggestion-applied highlights when analysis is turned off
+      const currentContent = editor.getHTML()
+      // Remove suggestion-applied marks/spans but keep the text content
+      // Handle both single and double quotes in class attribute, and both span and mark tags
+      let cleanedContent = currentContent.replace(
+        /<(span|mark)[^>]*class="[^"]*suggestion-applied[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+        '$2'
+      )
+      cleanedContent = cleanedContent.replace(
+        /<(span|mark)[^>]*class='[^']*suggestion-applied[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+        '$2'
+      )
+      // Also remove suggestion-applying marks/spans
+      cleanedContent = cleanedContent.replace(
+        /<(span|mark)[^>]*class="[^"]*suggestion-applying[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+        '$2'
+      )
+      cleanedContent = cleanedContent.replace(
+        /<(span|mark)[^>]*class='[^']*suggestion-applying[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+        '$2'
+      )
+      
+      if (cleanedContent !== currentContent) {
+        editor.commands.setContent(cleanedContent)
+        onContentChange?.(cleanedContent)
+      }
+    }
+  }, [analysisActive, editor, onContentChange])
 
   useEffect(() => {
     if (!editor) return
@@ -129,11 +244,11 @@ export function RichTextEditor({
             ? "Heading 3"
             : editor.isActive("taskList")
               ? "Todo list"
-            : editor.isActive("bulletList")
-              ? "Bullet list"
-              : editor.isActive("orderedList")
-                ? "Numbered list"
-                : "Text"
+              : editor.isActive("bulletList")
+                ? "Bullet list"
+                : editor.isActive("orderedList")
+                  ? "Numbered list"
+                  : "Text"
 
       setSelectedBlock((prev) => (prev === nextBlockLabel ? prev : nextBlockLabel))
 
@@ -165,29 +280,6 @@ export function RichTextEditor({
     }
   }, [editor])
 
-  // Clean up replaced words when analysis is disabled
-  if (editor && !analysisActive && replacedWords.size > 0) {
-    const currentContent = editor.getHTML()
-    let cleanedContent = currentContent
-
-    replacedWords.forEach((word) => {
-      cleanedContent = cleanedContent.replace(
-        new RegExp(`<span class="bg-green-100 text-green-700 font-semibold animate-pulse">${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</span>`, 'g'),
-        word
-      )
-    })
-
-    if (cleanedContent !== currentContent) {
-      editor.commands.setContent(cleanedContent)
-      onContentChange?.(cleanedContent)
-    }
-    setReplacedWords(new Set())
-  }
-
-  if (!editor) {
-    return null
-  }
-
   type ExtendedChain = ChainedCommands & {
     setFontFamily: (fontFamily: string) => ExtendedChain
     unsetFontFamily: () => ExtendedChain
@@ -198,7 +290,225 @@ export function RichTextEditor({
     toggleTaskList: () => ExtendedChain
   }
 
-  const focusChain = () => editor.chain().focus() as ExtendedChain
+  const focusChain = () => editor?.chain().focus() as ExtendedChain | undefined
+
+  const handleIssueClick = useCallback((issue: AnalysisIssue) => {
+    if (!issue.suggestion || !issue.text || !editor) {
+      console.log("[Editor] Cannot apply suggestion - missing data:", { 
+        hasSuggestion: !!issue.suggestion, 
+        hasText: !!issue.text, 
+        hasEditor: !!editor 
+      })
+      return
+    }
+
+    console.log("[Editor] Applying suggestion:", { 
+      text: issue.text, 
+      suggestion: issue.suggestion 
+    })
+
+    const currentContent = editor.getHTML()
+    console.log("[Editor] Current content length:", currentContent.length)
+    
+    const escapedText = issue.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    
+    // First, remove any existing highlights to find the original text
+    // This handles cases where text might already be highlighted with red (from analysis)
+    let contentToSearch = currentContent
+    // Remove red issue highlights
+    contentToSearch = contentToSearch.replace(
+      /<span[^>]*class="[^"]*issue-highlight[^"]*"[^>]*>(.*?)<\/span>/gi,
+      '$1'
+    )
+    // Remove any existing green highlights (both span and mark tags)
+    contentToSearch = contentToSearch.replace(
+      /<(span|mark)[^>]*class="[^"]*suggestion-applied[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+      '$2'
+    )
+    contentToSearch = contentToSearch.replace(
+      /<(span|mark)[^>]*class='[^']*suggestion-applied[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+      '$2'
+    )
+    
+    // Check if text exists in content
+    const textExists = contentToSearch.includes(issue.text)
+    console.log("[Editor] Text exists in content:", textExists)
+    
+    if (!textExists) {
+      console.warn("[Editor] Text not found in content:", issue.text)
+      // Try case-insensitive search
+      const textLower = issue.text.toLowerCase()
+      const contentLower = contentToSearch.toLowerCase()
+      if (contentLower.includes(textLower)) {
+        // Find the actual text with original case
+        const regex = new RegExp(escapedText, 'gi')
+        const match = contentToSearch.match(regex)
+        if (match && match[0]) {
+          console.log("[Editor] Found text with different case:", match[0])
+          // Use the matched text instead
+          const matchedText = match[0]
+          const escapedMatchedText = matchedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          
+          // First, show animated highlight - replace original text with suggestion
+          const animatedContent = contentToSearch.replace(
+            new RegExp(escapedMatchedText, 'g'),
+            `<span class="suggestion-applying" style="background-color: #bbf7d0; color: #065f46; font-weight: 600; padding: 0.125rem 0.25rem; border-radius: 0.25rem; display: inline;">${issue.suggestion}</span>`
+          )
+
+          editor.commands.setContent(animatedContent)
+          onContentChange?.(animatedContent)
+
+          // After animation, apply permanent green highlight
+          setTimeout(() => {
+            if (!issue.suggestion) return
+            
+            const currentContentAfterAnimation = editor.getHTML()
+            
+            // Remove suggestion-applying marks/spans first
+            let cleanedContent = currentContentAfterAnimation.replace(
+              /<(span|mark)[^>]*class="[^"]*suggestion-applying[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+              '$2'
+            )
+            cleanedContent = cleanedContent.replace(
+              /<(span|mark)[^>]*class='[^']*suggestion-applying[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+              '$2'
+            )
+            
+            // Replace with highlighted suggestion
+            const escapedSuggestion = issue.suggestion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const finalContent = cleanedContent.replace(
+              new RegExp(`(${escapedSuggestion})`, 'g'),
+              `<mark class="suggestion-applied" style="background-color: #d1fae5 !important; color: #065f46 !important; font-weight: 500; padding: 0.125rem 0.25rem; border-radius: 0.25rem; display: inline;">${issue.suggestion}</mark>`
+            )
+            
+            editor.commands.setContent(finalContent)
+            onContentChange?.(finalContent)
+            
+            // Force apply styles after content is set
+            setTimeout(() => {
+              const editorElement = editor.view.dom
+              const marks = editorElement.querySelectorAll('mark.suggestion-applied')
+              marks.forEach((mark) => {
+                const htmlMark = mark as HTMLElement
+                htmlMark.style.backgroundColor = '#d1fae5'
+                htmlMark.style.color = '#065f46'
+                htmlMark.style.fontWeight = '500'
+                htmlMark.style.padding = '0.125rem 0.25rem'
+                htmlMark.style.borderRadius = '0.25rem'
+                htmlMark.style.display = 'inline'
+              })
+            }, 50)
+            
+            onSuggestionAccept?.(issue.id)
+          }, 800)
+          return
+        }
+      }
+      console.error("[Editor] Text not found even with case-insensitive search")
+      return
+    }
+    
+    // First, show animated highlight - replace original text with suggestion
+    const animatedContent = contentToSearch.replace(
+      new RegExp(escapedText, 'g'),
+      `<mark class="suggestion-applying" style="background-color: #bbf7d0 !important; color: #065f46 !important; font-weight: 600; padding: 0.125rem 0.25rem; border-radius: 0.25rem; display: inline;">${issue.suggestion}</mark>`
+    )
+
+    console.log("[Editor] Applied animated highlight")
+    // Use insertContent to preserve HTML structure better
+    editor.commands.setContent(animatedContent)
+    onContentChange?.(animatedContent)
+
+    // After animation, apply permanent green highlight
+    setTimeout(() => {
+      if (!issue.text || !issue.suggestion) return
+      
+      // Get current content after animation
+      const currentContentAfterAnimation = editor.getHTML()
+      
+      // Remove suggestion-applying marks/spans first
+      let cleanedContent = currentContentAfterAnimation.replace(
+        /<(span|mark)[^>]*class="[^"]*suggestion-applying[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+        '$2'
+      )
+      cleanedContent = cleanedContent.replace(
+        /<(span|mark)[^>]*class='[^']*suggestion-applying[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+        '$2'
+      )
+      
+      // Now replace the suggestion text (or original text if not replaced) with highlighted suggestion
+      const escapedSuggestion = issue.suggestion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const escapedOriginalText = issue.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      
+      // Try to replace suggestion first (if already applied), then original text
+      let finalContent = cleanedContent.replace(
+        new RegExp(`(${escapedSuggestion})`, 'g'),
+        `<mark class="suggestion-applied" style="background-color: #d1fae5 !important; color: #065f46 !important; font-weight: 500; padding: 0.125rem 0.25rem; border-radius: 0.25rem; display: inline;">${issue.suggestion}</mark>`
+      )
+      
+      // If no replacement happened, try original text
+      if (finalContent === cleanedContent) {
+        finalContent = cleanedContent.replace(
+          new RegExp(`(${escapedOriginalText})`, 'g'),
+          `<mark class="suggestion-applied" style="background-color: #d1fae5 !important; color: #065f46 !important; font-weight: 500; padding: 0.125rem 0.25rem; border-radius: 0.25rem; display: inline;">${issue.suggestion}</mark>`
+        )
+      }
+      
+      console.log("[Editor] Applied permanent highlight")
+      editor.commands.setContent(finalContent)
+      onContentChange?.(finalContent)
+      
+      // Force re-render to ensure CSS is applied
+      setTimeout(() => {
+        const editorElement = editor.view.dom
+        const marks = editorElement.querySelectorAll('mark.suggestion-applied')
+        marks.forEach((mark) => {
+          const htmlMark = mark as HTMLElement
+          if (!htmlMark.style.backgroundColor || htmlMark.style.backgroundColor === '') {
+            htmlMark.style.backgroundColor = '#d1fae5'
+            htmlMark.style.color = '#065f46'
+            htmlMark.style.padding = '0.125rem 0.25rem'
+            htmlMark.style.borderRadius = '0.25rem'
+            htmlMark.style.display = 'inline'
+          }
+        })
+      }, 100)
+      onSuggestionAccept?.(issue.id)
+    }, 800)
+  }, [editor, onContentChange, onSuggestionAccept])
+
+  // Expose handleIssueClick via callback prop
+  useEffect(() => {
+    if (onIssueClick) {
+      // Pass the function to parent via callback
+      onIssueClick(handleIssueClick)
+    }
+  }, [onIssueClick, handleIssueClick])
+
+  // Clean up replaced words when analysis is disabled
+  useEffect(() => {
+    if (editor && !analysisActive && replacedWords.size > 0) {
+      const currentContent = editor.getHTML()
+      let cleanedContent = currentContent
+
+      replacedWords.forEach((word) => {
+        cleanedContent = cleanedContent.replace(
+          new RegExp(`<span class="bg-green-100 text-green-700 font-semibold animate-pulse">${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</span>`, 'g'),
+          word
+        )
+      })
+
+      if (cleanedContent !== currentContent) {
+        editor.commands.setContent(cleanedContent)
+        onContentChange?.(cleanedContent)
+      }
+      setReplacedWords(new Set())
+    }
+  }, [editor, analysisActive, replacedWords, onContentChange])
+
+  if (!editor) {
+    return null
+  }
 
   const handleBlockSelect = (label: string, action: () => boolean) => {
     if (analysisActive) return
@@ -211,19 +521,30 @@ export function RichTextEditor({
   const handleFontFamilyChange = (family: string) => {
     if (analysisActive) return
     if (!family || family === "Inter") {
-      focusChain().unsetFontFamily().run()
+      focusChain()?.unsetFontFamily().run()
       setSelectedFont("Inter")
       return
     }
 
-    focusChain().setFontFamily(family).run()
+    focusChain()?.setFontFamily(family).run()
     setSelectedFont(family)
   }
 
   const handleFontSizeChange = (label: FontSizeLabel) => {
     if (analysisActive) return
     const value = fontSizes[label]
-    focusChain().setTextStyle({ fontSize: value }).run()
+
+    // Apply fontSize using direct inline style
+    const { from, to, empty } = editor.state.selection
+
+    if (empty) {
+      // No selection - set as active mark for next typed text
+      editor.chain().focus().setMark('textStyle', { fontSize: value }).run()
+    } else {
+      // Has selection - wrap selection with fontSize style  
+      editor.chain().focus().setMark('textStyle', { fontSize: value }).run()
+    }
+
     setSelectedSize(label)
   }
 
@@ -259,37 +580,8 @@ export function RichTextEditor({
 
   const handleColorChange = (value: string) => {
     if (analysisActive) return
-    focusChain().setColor(value).run()
+    focusChain()?.setColor(value).run()
     setFontColor(value)
-  }
-  const handleIssueClick = (issue: AnalysisIssue) => {
-    if (!issue.suggestion || !issue.text) return
-
-    const currentContent = editor.getHTML()
-    const escapedText = issue.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const newContent = currentContent.replace(
-      new RegExp(escapedText, 'g'),
-      `<span class="bg-green-100 text-green-700 font-semibold animate-pulse">${issue.suggestion}</span>`
-    )
-
-    editor.commands.setContent(newContent)
-    onContentChange?.(newContent)
-
-    const newReplacedWords = new Set(replacedWords)
-    newReplacedWords.add(issue.suggestion)
-    setReplacedWords(newReplacedWords)
-
-    setTimeout(() => {
-      if (!issue.text || !issue.suggestion) return
-      const escapedText = issue.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const finalContent = currentContent.replace(
-        new RegExp(escapedText, 'g'),
-        issue.suggestion
-      )
-      editor.commands.setContent(finalContent)
-      onContentChange?.(finalContent)
-      onSuggestionAccept?.(issue.id)
-    }, 800)
   }
 
   const renderContentWithHighlights = () => {
@@ -298,6 +590,27 @@ export function RichTextEditor({
     }
 
     let html = editor.getHTML()
+    
+    // First, protect existing green highlights by temporarily replacing them (both span and mark tags)
+    const greenHighlightPlaceholders: string[] = []
+    html = html.replace(
+      /<(span|mark)[^>]*class="[^"]*suggestion-applied[^"]*"[^>]*>(.*?)<\/(span|mark)>/gi,
+      (match, tag1, content, tag2) => {
+        const placeholder = `__GREEN_HIGHLIGHT_${greenHighlightPlaceholders.length}__`
+        greenHighlightPlaceholders.push(match)
+        return placeholder
+      }
+    )
+    html = html.replace(
+      /<(span|mark)[^>]*class='[^']*suggestion-applied[^']*'[^>]*>(.*?)<\/(span|mark)>/gi,
+      (match, tag1, content, tag2) => {
+        const placeholder = `__GREEN_HIGHLIGHT_${greenHighlightPlaceholders.length}__`
+        greenHighlightPlaceholders.push(match)
+        return placeholder
+      }
+    )
+    
+    // Now add red highlights for issues
     const sortedIssues = [...analysisIssues].sort((a, b) => b.endPos - a.endPos)
 
     sortedIssues.forEach((issue) => {
@@ -310,27 +623,32 @@ export function RichTextEditor({
         `<span class="underline decoration-red-500 decoration-2 bg-red-100 cursor-pointer hover:bg-red-200 transition-all relative group px-0.5 rounded issue-highlight" data-issue-id="${issue.id}" data-issue-type="${issueTypeLabels[issue.type]}">${text}<span class="invisible group-hover:visible absolute bottom-full left-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-50 pointer-events-none">${issueTypeLabels[issue.type]}</span></span>`
       )
     })
+    
+    // Restore green highlights
+    greenHighlightPlaceholders.forEach((placeholder, index) => {
+      html = html.replace(`__GREEN_HIGHLIGHT_${index}__`, placeholder)
+    })
 
     return html
   }
 
   return (
-    <Card className="border-[rgba(55,50,47,0.12)] min-h-[600px] relative">
-      <CardHeader className="border-b border-[rgba(55,50,47,0.12)]">
+    <Card className="border-[rgba(55,50,47,0.08)] min-h-[600px] relative shadow-sm hover:shadow-md transition-shadow duration-200">
+      <CardHeader className="border-b border-[rgba(55,50,47,0.08)] bg-[#FAFAF9]">
         <div className="flex items-center justify-between mb-4">
-          <CardTitle className="text-lg">Document Editor</CardTitle>
+          <CardTitle className="text-lg font-semibold text-[#37322F]">Document Editor</CardTitle>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="h-9 bg-transparent min-w-[120px] justify-between"
-                disabled={analysisActive}
-              >
-                <span className="text-sm font-medium">{selectedBlock}</span>
-                <ChevronDown className="h-4 w-4" />
-              </Button>
+          <Button
+            variant="outline"
+            className="h-9 bg-white hover:bg-[#F7F5F3] min-w-[120px] justify-between border-[rgba(55,50,47,0.12)] transition-colors"
+            disabled={analysisActive}
+          >
+            <span className="text-sm font-medium text-[#37322F]">{selectedBlock}</span>
+            <ChevronDown className="h-4 w-4 text-[#605A57]" />
+          </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-60">
               <DropdownMenuLabel className="text-[11px] tracking-wide text-muted-foreground">
@@ -422,16 +740,16 @@ export function RichTextEditor({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div className="w-px bg-[rgba(55,50,47,0.12)]" />
+          <div className="w-px h-6 bg-[rgba(55,50,47,0.12)] self-center" />
 
           <Button
             variant="outline"
             size="icon"
-            className="h-9 w-9 bg-transparent"
+            className="h-9 w-9 bg-white hover:bg-[#F7F5F3] border-[rgba(55,50,47,0.12)] transition-colors"
             onClick={() => editor.chain().focus().toggleBold().run()}
             disabled={!editor.can().chain().focus().toggleBold().run() || analysisActive}
           >
-            <Bold className="h-4 w-4" />
+            <Bold className="h-4 w-4 text-[#37322F]" />
           </Button>
           <Button
             variant="outline"
@@ -480,11 +798,11 @@ export function RichTextEditor({
           </Button>
           <label
             className={cn(
-              "relative h-9 w-9 cursor-pointer rounded-md border bg-white text-muted-foreground transition hover:bg-muted flex items-center justify-center",
+              "relative h-9 w-9 cursor-pointer rounded-md border border-[rgba(55,50,47,0.12)] bg-white text-muted-foreground transition-colors hover:bg-[#F7F5F3] flex items-center justify-center",
               analysisActive && "pointer-events-none opacity-50"
             )}
           >
-            <Palette className="h-4 w-4" />
+            <Palette className="h-4 w-4 text-[#37322F]" />
             <input
               type="color"
               value={fontColor}
@@ -514,11 +832,11 @@ export function RichTextEditor({
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="p-6">
+      <CardContent className="p-0">
         <div
-          className={`min-h-[500px] p-4 rounded border focus-within:ring-2 ${analysisActive
-              ? 'bg-amber-50 border-amber-200 focus-within:ring-amber-300'
-              : 'bg-white border-[rgba(55,50,47,0.12)] focus-within:ring-[#37322F]/20'
+          className={`min-h-[600px] px-12 py-8 rounded-lg transition-all duration-200 ${analysisActive
+            ? 'bg-amber-50/50'
+            : 'bg-white'
             }`}
           onClick={(e) => {
             const target = e.target as HTMLElement
@@ -539,7 +857,7 @@ export function RichTextEditor({
               dangerouslySetInnerHTML={{ __html: renderContentWithHighlights() || editor.getHTML() }}
             />
           ) : (
-            <EditorContent editor={editor} className="prose prose-sm max-w-none" />
+            <EditorContent editor={editor} className="prose prose-sm max-w-none focus:outline-none" />
           )}
         </div>
       </CardContent>

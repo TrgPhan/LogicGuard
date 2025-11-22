@@ -5,6 +5,7 @@ from sqlalchemy.orm import relationship
 import enum
 import uuid
 from app.core.database import Base
+from app.utils.enum_types import EnumValueType
 
 
 class ErrorType(str, enum.Enum):
@@ -41,9 +42,10 @@ class LogicError(Base):
     document_id = Column(UUID(as_uuid=True), ForeignKey("DOCUMENT.id", ondelete="CASCADE"), nullable=False)
     paragraph_id = Column(UUID(as_uuid=True), ForeignKey("PARAGRAPH.id", ondelete="SET NULL"))
     sentence_id = Column(UUID(as_uuid=True), ForeignKey("SENTENCE.id", ondelete="SET NULL"))
-    error_type = Column(SQLEnum(ErrorType, name="ERROR_TYPE"), nullable=False)
-    error_category = Column(SQLEnum(ErrorCategory, name="ERROR_CATEGORY"), nullable=False)
-    severity = Column(SQLEnum(Severity, name="SEVERITY"), nullable=False, default=Severity.MEDIUM)
+    # Use custom EnumValueType to ensure enum values (not names) are stored in database
+    error_type = Column(EnumValueType(ErrorType), nullable=False)
+    error_category = Column(EnumValueType(ErrorCategory), nullable=False)
+    severity = Column(EnumValueType(Severity), nullable=False, default=Severity.MEDIUM.value)
     message = Column(Text, nullable=False)
     meta = Column(JSONB, nullable=False, server_default='{}')
     p_index = Column(Integer)
