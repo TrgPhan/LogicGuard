@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useDocument } from "@/lib/document-context"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Save, Download, ChevronLeft, Loader2, Check, Sparkles } from "lucide-react"
 import { RichTextEditor, type AnalysisIssue } from "@/components/rich-text-editor"
 import { ContextSetup } from "@/components/context-setup"
@@ -56,6 +55,7 @@ export default function CanvasPage() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [analysisActive, setAnalysisActive] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisIssues, setAnalysisIssues] = useState<AnalysisIssue[]>([])
   const [appliedSuggestions, setAppliedSuggestions] = useState<string[]>([])
   const initialContentRef = useRef<string>("")
@@ -218,6 +218,7 @@ export default function CanvasPage() {
 
     // Bật chế độ phân tích
     setAnalysisActive(true)
+    setIsAnalyzing(true)
     setError(null)
 
     try {
@@ -228,6 +229,7 @@ export default function CanvasPage() {
         setError("Không có nội dung để phân tích")
         setAnalysisIssues([])
         setAnalysisActive(false)
+        setIsAnalyzing(false)
         return
       }
 
@@ -250,6 +252,7 @@ export default function CanvasPage() {
         setError("Bạn chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.")
         setAnalysisIssues([])
         setAnalysisActive(false)
+        setIsAnalyzing(false)
         return
       }
 
@@ -286,6 +289,7 @@ export default function CanvasPage() {
         setError("Bạn chưa đăng nhập hoặc không có quyền sử dụng tính năng phân tích.")
         setAnalysisIssues([])
         setAnalysisActive(false)
+        setIsAnalyzing(false)
         return
       }
 
@@ -295,6 +299,7 @@ export default function CanvasPage() {
         setError("Phân tích thất bại từ server")
         setAnalysisIssues([])
         setAnalysisActive(false)
+        setIsAnalyzing(false)
         return
       }
 
@@ -313,6 +318,7 @@ export default function CanvasPage() {
 
       console.log("[Canvas] mapped issues:", mapped.length)
       setAnalysisIssues(mapped)
+      setIsAnalyzing(false)
     } catch (err: unknown) {
       console.error("[Canvas] Analysis failed:", err)
       if (err instanceof Error) {
@@ -322,6 +328,7 @@ export default function CanvasPage() {
       }
       setAnalysisIssues([])
       setAnalysisActive(false)
+      setIsAnalyzing(false)
     }
   }
 
@@ -362,6 +369,13 @@ export default function CanvasPage() {
 
   return (
     <div className="p-8 space-y-6">
+      {isAnalyzing && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Đang phân tích văn bản của bạn, vui lòng chờ...</span>
+        </div>
+      )}
+
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
           {error}
@@ -393,12 +407,20 @@ export default function CanvasPage() {
           </Button>
           <Button
             onClick={handleAnalyze}
-            className={`gap-2 ${
-              analysisActive ? "bg-blue-600 hover:bg-blue-700" : "bg-[#37322F] hover:bg-[#37322F]/90"
-            }`}
+            disabled={isAnalyzing}
+            className={`gap-2 ${analysisActive ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#37322F] hover:bg-[#37322F]/90'}`}
           >
-            <Sparkles className="h-4 w-4" />
-            {analysisActive ? "Analysis Active" : "Analyze"}
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                {analysisActive ? 'Analysis Active' : 'Analyze'}
+              </>
+            )}
           </Button>
           <Button className="gap-2 bg-[#37322F] hover:bg-[#37322F]/90" onClick={handleExport}>
             <Download className="h-4 w-4" />
@@ -423,40 +445,6 @@ export default function CanvasPage() {
             <AnalysisIssuesOverlay issues={analysisIssues} onSuggestionClick={handleSuggestionClick} />
           ) : (
             <>
-              <Card className="border-[rgba(55,50,47,0.12)]">
-                <CardHeader>
-                  <CardTitle className="text-base">Writing Type</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="text-sm space-y-2">
-                    <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
-                      <input type="radio" id="essay" name="writing-type" defaultChecked className="h-4 w-4" />
-                      <label htmlFor="essay" className="text-[#37322F] cursor-pointer">
-                        Essay
-                      </label>
-                    </div>
-                    <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
-                      <input type="radio" id="research" name="writing-type" className="h-4 w-4" />
-                      <label htmlFor="research" className="text-[#37322F] cursor-pointer">
-                        Research Paper
-                      </label>
-                    </div>
-                    <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
-                      <input type="radio" id="proposal" name="writing-type" className="h-4 w-4" />
-                      <label htmlFor="proposal" className="text-[#37322F] cursor-pointer">
-                        Business Proposal
-                      </label>
-                    </div>
-                    <div className="flex items-center gap-2 p-2 rounded hover:bg-[#F7F5F3] cursor-pointer">
-                      <input type="radio" id="review" name="writing-type" className="h-4 w-4" />
-                      <label htmlFor="review" className="text-[#37322F] cursor-pointer">
-                        Literature Review
-                      </label>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
               <ContextSetup goal={currentGoal} onApply={handleContextApply} />
             </>
           )}
